@@ -12,6 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Audio;
@@ -115,10 +116,13 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
             ShutDownCanvas();
         }
 
-        // The original's window is a fixed 640x480. Applying this once in the
-        // constructor does not stick — launching by double-clicking the exe
-        // activates the window before the presenter is ready — so it is
-        // re-applied after layout and on every activation.
+        // The original's window is a fixed 640x480.
+        //
+        // OverlappedPresenter.IsResizable alone proved unreliable: it works
+        // when the window is activated late (as when launched from a shell)
+        // but not when the exe is double-clicked, which activates before the
+        // presenter is ready. The window style is therefore also stripped of
+        // WS_THICKFRAME/WS_MAXIMIZEBOX directly, which is unconditional.
         private void LockWindowSize()
         {
             if (AppWindow?.Presenter is OverlappedPresenter presenter)
@@ -126,19 +130,59 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
                 presenter.IsResizable = false;
                 presenter.IsMaximizable = false;
             }
+
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            if (hwnd == IntPtr.Zero)
+            {
+                return;
+            }
+
+            var style = GetWindowLong(hwnd, GwlStyle);
+            var locked = style & ~(WsThickFrame | WsMaximizeBox);
+            if (locked == style)
+            {
+                return;
+            }
+
+            SetWindowLong(hwnd, GwlStyle, locked);
+            SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoZOrder | SwpFrameChanged);
         }
 
+        private const int GwlStyle = -16;
+        private const int WsThickFrame = 0x00040000;
+        private const int WsMaximizeBox = 0x00010000;
+        private const uint SwpNoSize = 0x0001;
+        private const uint SwpNoMove = 0x0002;
+        private const uint SwpNoZOrder = 0x0004;
+        private const uint SwpFrameChanged = 0x0020;
+
+        [LibraryImport("user32.dll", EntryPoint = "GetWindowLongW")]
+        private static partial int GetWindowLong(IntPtr hWnd, int nIndex);
+
+        [LibraryImport("user32.dll", EntryPoint = "SetWindowLongW")]
+        private static partial int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+        [LibraryImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static partial bool SetWindowPos(
+            IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
+
         // WinUI3 opens windows at a default size rather than sized to content,
-        // so the chrome overhead is measured once the first layout pass has run
-        // and the window resized to make the 640x480 canvas fit exactly.
+        // so the chrome overhead is measured once layout has run and the window
+        // resized to make the 640x480 canvas fit exactly. The measurement is
+        // deferred one tick past LockWindowSize so it sees the thinner
+        // non-resizable frame rather than the original one.
         private void RootGrid_Loaded(object sender, RoutedEventArgs e)
         {
             RootGrid.Loaded -= RootGrid_Loaded;
             LockWindowSize();
+            DispatcherQueue.TryEnqueue(FitWindowToContent);
+        }
 
+        private void FitWindowToContent()
+        {
             if (RootGrid.XamlRoot is not { } xamlRoot)
             {
-                DispatcherQueue.TryEnqueue(LockWindowSize);
                 return;
             }
 
@@ -146,12 +190,13 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
             var deltaWidth = (int)Math.Round((640 - RootGrid.ActualWidth) * scale);
             var deltaHeight = (int)Math.Round((480 - RootGrid.ActualHeight) * scale);
 
-            AppWindow.Resize(new SizeInt32(AppWindow.Size.Width + deltaWidth, AppWindow.Size.Height + deltaHeight));
-            _cursorHost.Focus(FocusState.Programmatic);
+            if (deltaWidth != 0 || deltaHeight != 0)
+            {
+                AppWindow.Resize(new SizeInt32(AppWindow.Size.Width + deltaWidth, AppWindow.Size.Height + deltaHeight));
+            }
 
-            // Re-applied after the resize has been processed; AppWindow.Resize
-            // can otherwise land after the style change and undo it.
-            DispatcherQueue.TryEnqueue(LockWindowSize);
+            LockWindowSize();
+            _cursorHost.Focus(FocusState.Programmatic);
         }
 
         // Keyboard focus can be lost when the window is deactivated (or when a
