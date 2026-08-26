@@ -56,6 +56,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
         private SceneContext? _context;
         private Dictionary<SceneId, Func<IScene>>? _factories;
         private bool _allowClose;
+        private bool _canvasShutDown;
         private bool _cursorHidden;
         private readonly CursorHostGrid _cursorHost;
         private PointInt32? _restingWindowPosition;
@@ -74,7 +75,6 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Top,
             };
-            _cursorHost.KeyDown += RootGrid_KeyDown;
             _cursorHost.PointerMoved += MainCanvas_PointerMoved;
             _cursorHost.PointerPressed += MainCanvas_PointerPressed;
             RootGrid.Children.Insert(RootGrid.Children.IndexOf(MainCanvas) + 1, _cursorHost);
@@ -86,7 +86,19 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
             // entry overlay starts hidden and is revealed by SetumeiScene.
             SetumeiOverlay.Visibility = Visibility.Collapsed;
 
+            if (AppWindow.Presenter is OverlappedPresenter presenter)
+            {
+                presenter.IsResizable = false;
+                presenter.IsMaximizable = false;
+            }
+
+            // Keys are handled on the root with handledEventsToo so they still
+            // reach the scene even when a focused child marks them handled
+            // (arrow keys and Tab are otherwise eaten by focus navigation).
+            RootGrid.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(RootGrid_KeyDown), true);
+
             RootGrid.Loaded += RootGrid_Loaded;
+            Activated += MainWindow_Activated;
             Closed += MainWindow_Closed;
             AppWindow.Closing += AppWindow_Closing;
         }
@@ -97,13 +109,14 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
         // shutdown dialog or the nag dialog's own "もちろんさあ" button).
         private void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
         {
-            if (_allowClose || _sceneManager is null || _context?.CloseIntercept is not { } target)
+            if (!_allowClose && _sceneManager is not null && _context?.CloseIntercept is { } target)
             {
+                args.Cancel = true;
+                _sceneManager.ForceTransition(target);
                 return;
             }
 
-            args.Cancel = true;
-            _sceneManager.ForceTransition(target);
+            ShutDownCanvas();
         }
 
         // WinUI3 opens new windows at a default size, not sized to their content.
@@ -115,21 +128,28 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
         {
             RootGrid.Loaded -= RootGrid_Loaded;
 
-            var scale = RootGrid.XamlRoot.RasterizationScale;
-            var desiredWidthPx = (int)Math.Round(640 * scale);
-            var desiredHeightPx = (int)Math.Round(480 * scale);
-            var actualWidthPx = (int)Math.Round(RootGrid.ActualWidth * scale);
-            var actualHeightPx = (int)Math.Round(RootGrid.ActualHeight * scale);
+            if (RootGrid.XamlRoot is not { } xamlRoot)
+            {
+                return;
+            }
 
-            var deltaWidth = desiredWidthPx - actualWidthPx;
-            var deltaHeight = desiredHeightPx - actualHeightPx;
+            var scale = xamlRoot.RasterizationScale;
+            var deltaWidth = (int)Math.Round((640 - RootGrid.ActualWidth) * scale);
+            var deltaHeight = (int)Math.Round((480 - RootGrid.ActualHeight) * scale);
 
             AppWindow.Resize(new SizeInt32(AppWindow.Size.Width + deltaWidth, AppWindow.Size.Height + deltaHeight));
+            _cursorHost.Focus(FocusState.Programmatic);
+        }
 
-            if (AppWindow.Presenter is OverlappedPresenter presenter)
+        // Keyboard focus can be lost when the window is deactivated (or when a
+        // scene swap happens while another element briefly holds it), so it is
+        // reclaimed whenever the window comes back to the foreground.
+        private void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
+        {
+            if (args.WindowActivationState != WindowActivationState.Deactivated
+                && SetumeiOverlay.Visibility != Visibility.Visible)
             {
-                presenter.IsResizable = false;
-                presenter.IsMaximizable = false;
+                _cursorHost.Focus(FocusState.Programmatic);
             }
         }
 
@@ -139,8 +159,24 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
         // already released — which surfaced as a 0x80000003 fail-fast on exit.
         // RemoveFromVisualTree is Win2D's documented shutdown for this control:
         // it stops the loop and releases its resources deterministically.
-        private void MainWindow_Closed(object sender, WindowEventArgs args)
+        private void MainWindow_Closed(object sender, WindowEventArgs args) => ShutDownCanvas();
+
+        // CanvasAnimatedControl drives Update/Draw on its own game-loop thread.
+        // Merely pausing it does not wait for an in-flight frame, so tearing the
+        // window down could leave that thread touching resources that were
+        // already released — which surfaced as a 0x80000003 fail-fast on exit.
+        // RemoveFromVisualTree is Win2D's documented shutdown for this control:
+        // it stops the loop and releases its resources deterministically. This
+        // runs from AppWindow.Closing, while the window is still alive, and is
+        // idempotent because Closed fires afterwards too.
+        private void ShutDownCanvas()
         {
+            if (_canvasShutDown)
+            {
+                return;
+            }
+
+            _canvasShutDown = true;
             _sceneManager = null;
             _sound?.StopAll();
 

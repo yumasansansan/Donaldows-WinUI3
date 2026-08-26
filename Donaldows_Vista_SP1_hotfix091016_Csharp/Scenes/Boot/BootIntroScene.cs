@@ -26,6 +26,11 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
         private const string CaptionLoading = "読\nみ\n込\nみ\n中";
         private const string CaptionWait = "ち\nょ\nっ\nと\nま\nっ\nて\nね";
 
+        // pos 580,10 : font "",50,16
+        private const float CaptionX = 580f;
+        private const float CaptionY = 10f;
+        private const float CaptionFontSize = 50f;
+
         private SceneContext _context = null!;
         private Frame[] _frames = Array.Empty<Frame>();
         private int _index;
@@ -105,15 +110,32 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
             }
 
             // font "",50,16 — size 50; style bit 16 is antialiasing, not bold.
+            // The caption is one character per line down the right edge, which
+            // is exactly how `mes "読\nみ\n込\nみ\n中"` lays it out. Each glyph
+            // is placed individually rather than relying on a multi-line text
+            // format, so line metrics can't push it off-screen.
             using var format = new CanvasTextFormat
             {
-                FontSize = 50,
+                FontSize = CaptionFontSize,
                 WordWrapping = CanvasWordWrapping.NoWrap,
-                LineSpacingMode = CanvasLineSpacingMode.Uniform,
-                LineSpacing = 50,
-                LineSpacingBaseline = 42,
             };
-            session.DrawText(frame.Caption, 580, 10, Colors.White, format);
+
+            var line = 0;
+            foreach (var ch in frame.Caption)
+            {
+                if (ch == '\n')
+                {
+                    continue;
+                }
+
+                session.DrawText(
+                    ch.ToString(),
+                    CaptionX,
+                    CaptionY + line * CaptionFontSize,
+                    Colors.White,
+                    format);
+                line++;
+            }
         }
 
         public SceneTransition? Update(TimeSpan delta)
