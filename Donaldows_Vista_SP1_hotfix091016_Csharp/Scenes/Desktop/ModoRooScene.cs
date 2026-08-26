@@ -27,8 +27,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Desktop
 
         public void Draw(CanvasDrawingSession session, Size canvasSize)
         {
-            session.Clear(Colors.Black);
-            session.DrawImage(_context.Buffers.GetBitmap(BufferId.DesktopBackground), new Rect(0, 0, 640, 480));
+            DesktopBackdrop.Draw(session, _context);
 
             var progress = Math.Clamp((float)(_elapsed / Duration), 0f, 1f);
             var y = 220f + progress * 240f; // slides from a=220 down to 460

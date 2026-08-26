@@ -71,12 +71,12 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Desktop
             session.Clear(Color.FromArgb(255, 0, 20, 20));
             session.FillRectangle(20, 2, 278, 20, Color.FromArgb(255, 255, 128, 0));
 
-            using var titleFormat = new CanvasTextFormat { FontSize = 13 };
+            using var titleFormat = HspFont.Create();
             session.DrawText("ドナルドからのメッセージ", 40, 2, Color.FromArgb(255, 0, 20, 20), titleFormat);
 
             session.DrawImage(_context.Buffers.GetBitmap(BufferId.DonaFace), 30, 50);
 
-            using var bodyFormat = new CanvasTextFormat { FontSize = 14 };
+            using var bodyFormat = HspFont.Create();
             session.DrawText("「また今度一緒に遊ぼうね！☆」", 130, 70, Colors.White, bodyFormat);
 
             DrawButton(session, CloseButton, "CLOSE[X]");

@@ -2,7 +2,6 @@ using System;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Audio;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Rendering;
 using Microsoft.Graphics.Canvas;
-using Microsoft.Graphics.Canvas.Text;
 using Microsoft.UI;
 using Windows.Foundation;
 using Windows.System;
@@ -48,7 +47,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
             }
 
             session.Clear(Colors.Black);
-            using var format = new CanvasTextFormat { FontSize = 14 };
+            using var format = HspFont.Create();
 
             if (_elapsed < BarStartsAt)
             {
@@ -76,7 +75,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
             session.FillRectangle(0, 400, 640, 80, Color.FromArgb(255, 70, 155, 255));
 
             var ink = Color.FromArgb(255, 20, 25, 25);
-            using var format = new CanvasTextFormat { FontSize = 14 };
+            using var format = HspFont.Create();
             session.DrawText("D O N A L D O W S へようこそ!", 20, 405, ink, format);
             session.DrawText("　ドナルドウズをインストーる～☆します。インストーる～☆しますか？", 20, 423, ink, format);
             session.DrawText("　　　　　　（[Y]es：もちろんさ　[N]o：もちろんさ）", 20, 441, ink, format);

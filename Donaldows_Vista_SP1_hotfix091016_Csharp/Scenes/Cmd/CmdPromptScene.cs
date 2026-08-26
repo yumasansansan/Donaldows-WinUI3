@@ -4,7 +4,6 @@ using System.Text;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Audio;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Rendering;
 using Microsoft.Graphics.Canvas;
-using Microsoft.Graphics.Canvas.Text;
 using Microsoft.UI;
 using Windows.Foundation;
 using Windows.System;
@@ -106,7 +105,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Cmd
 
                 case Phase.Typing:
                     session.Clear(Colors.Black);
-                    using (var format = new CanvasTextFormat { FontSize = 13 })
+                    using (var format = HspFont.Create())
                     {
                         session.DrawText(
                             "使えるコマンドを知りたい時はHELPと入力、終わるときはEXITと入力\nコマンドを入力したらＥＮＴＥＲキーを押そう。",
@@ -125,14 +124,14 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Cmd
                     DrawWrapped(session, FormatWarningText, Colors.White);
                     if (_message.Length > 0)
                     {
-                        using var format = new CanvasTextFormat { FontSize = 14 };
+                        using var format = HspFont.Create();
                         session.DrawText(_message, 0, 300, Colors.Yellow, format);
                     }
 
                     break;
 
                 case Phase.Formatting:
-                    using (var format = new CanvasTextFormat { FontSize = 14 })
+                    using (var format = HspFont.Create())
                     {
                         if (_formatElapsed < FormatGoAt)
                         {
@@ -204,7 +203,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Cmd
 
         private static void DrawWrapped(CanvasDrawingSession session, string text, Color color)
         {
-            using var format = new CanvasTextFormat { FontSize = 13 };
+            using var format = HspFont.Create();
             session.DrawText(text, new Rect(0, 0, 640, 480), color, format);
         }
 

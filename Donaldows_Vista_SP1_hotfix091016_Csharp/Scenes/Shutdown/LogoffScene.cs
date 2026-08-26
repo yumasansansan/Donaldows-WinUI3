@@ -13,8 +13,8 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Shutdown
     // desktop (which replays the morning greeting on arrival, as in *desktop).
     public sealed class LogoffScene : IScene
     {
-        private static readonly TimeSpan FadeOut = TimeSpan.FromMilliseconds(400);
-        private static readonly TimeSpan Total = TimeSpan.FromMilliseconds(700);
+        private static readonly TimeSpan FadeOut = TimeSpan.FromMilliseconds(1500);
+        private static readonly TimeSpan Total = TimeSpan.FromMilliseconds(1800);
 
         private SceneContext _context = null!;
         private TimeSpan _elapsed;
@@ -30,9 +30,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Shutdown
 
         public void Draw(CanvasDrawingSession session, Size canvasSize)
         {
-            session.Clear(Colors.Black);
-            session.DrawImage(_context.Buffers.GetBitmap(BufferId.DesktopBackground), new Rect(0, 0, 640, 480));
-            session.FillRectangle(0, 460, 640, 20, _context.Buffers.GetColor(BufferId.TaskbarBackdrop));
+            DesktopBackdrop.Draw(session, _context);
 
             var fade = Math.Clamp((float)(_elapsed / FadeOut), 0f, 1f);
             session.FillRectangle(0, 0, 640, 480, Color.FromArgb((byte)(fade * 255), 0, 0, 0));

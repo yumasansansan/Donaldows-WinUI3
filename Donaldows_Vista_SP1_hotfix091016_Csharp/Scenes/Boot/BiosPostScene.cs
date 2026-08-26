@@ -2,7 +2,6 @@ using System;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Audio;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Rendering;
 using Microsoft.Graphics.Canvas;
-using Microsoft.Graphics.Canvas.Text;
 using Microsoft.UI;
 using Windows.Foundation;
 using Windows.System;
@@ -10,19 +9,24 @@ using Windows.UI;
 
 namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
 {
-    // Ports *power_sw/*bios, including the deldona=1 "Operating System
-    // Notfound" branch that routes into the RPG punishment battle after the
-    // *cmd FORMAT easter egg.
+    // Ports *power_sw and *bios, including the deldona=1 "Operating System
+    // Notfound" branch that routes into the RPG punishment battle.
+    //
+    // *power_sw blanks the screen first (cls, wait 1, cls 4, wait 50, beep,
+    // wait 100) so there is about a second and a half of black before the BIOS
+    // logo appears; the logo then sits alone for `wait 20` before the version
+    // header is printed at the top of the screen.
     //
     // The original's `beep` calls (via kernel32.as) aren't ported — they're
     // PC-speaker tones with no wav equivalent in the sound catalog.
     public sealed class BiosPostScene : IScene
     {
-        private static readonly TimeSpan LogoHold = TimeSpan.FromMilliseconds(200);
-        private static readonly TimeSpan NormalPostDuration = LogoHold + TimeSpan.FromMilliseconds(2000);
+        private static readonly TimeSpan PowerOnBlank = TimeSpan.FromMilliseconds(1510);
+        private static readonly TimeSpan LogoAt = PowerOnBlank;
+        private static readonly TimeSpan HeaderAt = LogoAt + TimeSpan.FromMilliseconds(200);
+        private static readonly TimeSpan NormalPostDuration = HeaderAt + TimeSpan.FromMilliseconds(2000);
 
-        // deldona branch beats, as offsets from scene entry.
-        private static readonly TimeSpan SearchingAt = LogoHold;
+        private static readonly TimeSpan SearchingAt = HeaderAt;
         private static readonly TimeSpan NotFoundListAt = SearchingAt + TimeSpan.FromMilliseconds(1000);
         private static readonly TimeSpan ErrorLineAt = NotFoundListAt + TimeSpan.FromMilliseconds(2000);
         private static readonly TimeSpan DialogsAt = ErrorLineAt + TimeSpan.FromMilliseconds(2000);
@@ -38,6 +42,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
         private TimeSpan _elapsed;
         private bool _punishment;
         private int _dialogIndex = -1;
+        private bool _logoSoundPlayed;
 
         public void Enter(SceneContext context, object? payload)
         {
@@ -46,22 +51,34 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
             _punishment = _context.AppState.Deldona;
             _context.CloseIntercept = null; // *bios does `onexit 0`
             _dialogIndex = -1;
-            _context.Sound.PlayEffect(SoundId.Heha);
+            _logoSoundPlayed = false;
         }
 
         public void Draw(CanvasDrawingSession session, Size canvasSize)
         {
             session.Clear(Colors.Black);
+
+            if (_elapsed < LogoAt)
+            {
+                return;
+            }
+
             session.DrawImage(_context.Buffers.GetBitmap(BufferId.BiosLogo), 0, 0);
 
-            using var format = new CanvasTextFormat { FontSize = 14 };
-            session.DrawText("DONA BIOS V0.6.5--(c)2008-2009", 0, 40, Colors.White, format);
+            if (_elapsed < HeaderAt)
+            {
+                return;
+            }
+
+            using var format = HspFont.Create();
+            session.DrawText("DONA BIOS V0.6.5--(c)2008-2009", 0, 0, Colors.White, format);
 
             if (!_punishment)
             {
                 return;
             }
 
+            // The original prints the POST log from pos 0,60 downward.
             var log = "";
             if (_elapsed >= SearchingAt)
             {
@@ -76,24 +93,28 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
 
             if (_elapsed >= ErrorLineAt)
             {
-                log += "Err:0x45546185>Operating System Notfound !\n";
+                log += "Err:0x45546185>Operating System Notfound !";
             }
 
-            session.DrawText(log, new Rect(0, 60, 640, 300), Colors.White, format);
+            session.DrawText(log, 0, 60, Colors.White, format);
 
             if (_dialogIndex >= 0 && _dialogIndex < BiosDonaldDialogs.Length)
             {
-                session.FillRectangle(60, 200, 520, 80, Color.FromArgb(255, 40, 40, 40));
-                session.FillRectangle(60, 200, 520, 80, Color.FromArgb(40, 255, 255, 255));
-                using var dialogFormat = new CanvasTextFormat { FontSize = 14 };
-                session.DrawText(BiosDonaldDialogs[_dialogIndex], new Rect(70, 210, 500, 40), Colors.White, dialogFormat);
-                session.DrawText("[クリックまたはキーで続行]", new Rect(70, 252, 500, 20), Colors.Gray, dialogFormat);
+                session.FillRectangle(60, 200, 520, 84, Color.FromArgb(255, 60, 60, 60));
+                session.DrawText(BiosDonaldDialogs[_dialogIndex], 70, 212, Colors.White, format);
+                session.DrawText("[クリックまたはキーで続行]", 70, 254, Colors.Silver, format);
             }
         }
 
         public SceneTransition? Update(TimeSpan delta)
         {
             _elapsed += delta;
+
+            if (!_logoSoundPlayed && _elapsed >= LogoAt)
+            {
+                _logoSoundPlayed = true;
+                _context.Sound.PlayEffect(SoundId.Heha);
+            }
 
             if (!_punishment)
             {
@@ -103,7 +124,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
             }
 
             // The original's three `dialog` calls are modal message boxes; here
-            // they advance on click/keypress instead (see Advance below).
+            // they advance on click/keypress instead.
             if (_dialogIndex < 0 && _elapsed >= DialogsAt)
             {
                 _dialogIndex = 0;

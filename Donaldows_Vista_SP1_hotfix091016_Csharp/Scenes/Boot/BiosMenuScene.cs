@@ -1,8 +1,8 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using Donaldows_Vista_SP1_hotfix091016_Csharp.Rendering;
 using Microsoft.Graphics.Canvas;
-using Microsoft.Graphics.Canvas.Text;
 using Microsoft.UI;
 using Windows.Foundation;
 using Windows.System;
@@ -11,6 +11,13 @@ using Windows.UI;
 namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
 {
     // Ports *biosmenu/*bioskeycheck/*biosdialog.
+    //
+    // Layout follows the original's geometry, which is driven by `by` — a
+    // counter that grows 0→40 on entry, animating the panels open:
+    //   rows           boxf 0, 40+by*(n+1), ..., +20      -> 80/120/160/200/240
+    //   description    boxf 641-by*10, 60, 961-by*8, 360  -> 241,60 .. 641,360
+    //   bottom bar     boxf 0, 480-by*2, 640, 480         -> y 400..480
+    //   marquee strip  boxf 0, 380, 640, 400
     //
     // Function-key mapping follows the original's raw wparam values, which do
     // NOT line up with its own on-screen hint text:
@@ -22,7 +29,6 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
     //               the first menu row's own help text tells you to press.
     //   116 = F5 -> "save and exit" confirm, gated on a flag (`sv`) that is
     //               never assigned anywhere in the source, so it is dead code.
-    // An earlier version of this port mislabelled F4 as the dead one; it is F5.
     public sealed class BiosMenuScene : IScene
     {
         private readonly record struct MenuItem(string Title, string Description);
@@ -40,11 +46,15 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
             "こちらで各種設定を行います。設定方法やどんな事を設定できるかを知るには" +
             "ユーザーズマニュアルを参照して下さい([F1]key)";
 
+        private const float ByMax = 40f;
+        private const float ByPerSecond = 60f;
+
         private SceneContext _context = null!;
         private int _selected;
         private string? _pendingConfirm;
         private bool _confirmExitsOnYes;
         private float _marqueeX = 640f;
+        private float _by;
 
         public void Enter(SceneContext context, object? payload)
         {
@@ -53,11 +63,13 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
             _pendingConfirm = null;
             _confirmExitsOnYes = false;
             _marqueeX = 640f;
+            _by = 0f;
         }
 
         public SceneTransition? Update(TimeSpan delta)
         {
-            // Original decrements the marquee by 1 per frame and wraps at -1000.
+            _by = Math.Min(ByMax, _by + ByPerSecond * (float)delta.TotalSeconds);
+
             _marqueeX -= 60f * (float)delta.TotalSeconds;
             if (_marqueeX <= -1000f)
             {
@@ -70,43 +82,49 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
         public void Draw(CanvasDrawingSession session, Size canvasSize)
         {
             session.Clear(Colors.Black);
-            session.FillRectangle(0, 400, 640, 80, Color.FromArgb(255, 0, 0, 128));
 
-            using var titleFormat = new CanvasTextFormat { FontSize = 14 };
-            session.DrawText("DONA BIOS V0.5.5--(c)2008-2009                              BIOS MENU", 0, 0, Colors.White, titleFormat);
+            using var format = HspFont.Create();
 
-            using var itemFormat = new CanvasTextFormat { FontSize = 14 };
+            // Bottom blue bar grows up from the bottom edge as `by` climbs.
+            session.FillRectangle(0, 480 - _by * 2, 640, _by * 2, Color.FromArgb(255, 0, 0, 128));
+
+            session.DrawText(
+                "DONA BIOS V0.5.5--(c)2008-2009                              BIOS MENU",
+                0, 0, Colors.White, format);
+
+            // Description panel slides in from the right.
+            var descX = 641 - _by * 10;
+            var descRight = 961 - _by * 8;
+            session.FillRectangle(descX, 60, descRight - descX, 300, Colors.White);
+            session.DrawText(Items[_selected].Description, descX, 60, Colors.Black, format);
+
             for (var i = 0; i < Items.Length; i++)
             {
-                var y = 40 + i * 24;
+                var y = 40 + _by * (i + 1);
                 if (i == _selected)
                 {
-                    session.FillRectangle(0, y, 240, 20, Color.FromArgb(255, 0, 200, 255));
-                    session.DrawText(Items[i].Title, 40, y, Colors.Black, itemFormat);
+                    var width = i == 0 ? _by + 200 : 240;
+                    session.FillRectangle(0, y, width, 20, Color.FromArgb(255, 0, 200, 255));
+                    session.DrawText(Items[i].Title, 40, y, Colors.Black, format);
                 }
                 else
                 {
-                    session.DrawText(Items[i].Title, 40, y, Colors.White, itemFormat);
+                    session.DrawText(Items[i].Title, 40, y, Colors.White, format);
                 }
             }
 
-            session.FillRectangle(260, 60, 320, 300, Colors.White);
-            using var descFormat = new CanvasTextFormat { FontSize = 13 };
-            session.DrawText(Items[_selected].Description, new Rect(266, 66, 308, 288), Colors.Black, descFormat);
+            session.FillRectangle(0, 380, 640, 20, Colors.Black);
+            session.DrawText(MarqueeText, _marqueeX, 380, Colors.White, format);
 
-            using var marqueeFormat = new CanvasTextFormat { FontSize = 13, WordWrapping = CanvasWordWrapping.NoWrap };
-            session.DrawText(MarqueeText, _marqueeX, 380, Colors.White, marqueeFormat);
-
-            using var hintFormat = new CanvasTextFormat { FontSize = 13 };
-            session.DrawText("[Esc]-ForceQuit [F1]-Readme [F2]-Reset [F3]-Default [F4]-Save&Reboot", 0, 405, Colors.White, hintFormat);
-            session.DrawText("操作    [↑]     確定        取り消し\n    [←][↓][→]     [Enter]      [BS]or[Del]", 0, 425, Colors.White, hintFormat);
+            session.DrawText("[Esc]-ForceQuit [F1]-Readme [F2]-Reset [F3]-Default [F4]-Save&Reboot", 0, 405, Colors.White, format);
+            session.DrawText("操作    [↑]     確定        取り消し", 0, 441, Colors.White, format);
+            session.DrawText("    [←][↓][→]     [Enter] 　　　　[BS]or[Del] ", 0, 459, Colors.White, format);
 
             if (_pendingConfirm is { } message)
             {
                 session.FillRectangle(0, 0, 640, 480, Color.FromArgb(200, 0, 0, 0));
-                using var dialogFormat = new CanvasTextFormat { FontSize = 14 };
-                session.DrawText(message, 0, 423, Colors.White, dialogFormat);
-                session.DrawText("[Y]es/[N]o", 550, 460, Colors.White, dialogFormat);
+                session.DrawText(message, 0, 423, Colors.White, format);
+                session.DrawText("[Y]es/[N]o", 550, 460, Colors.White, format);
             }
         }
 

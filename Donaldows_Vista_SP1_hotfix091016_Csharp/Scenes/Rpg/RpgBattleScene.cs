@@ -2,7 +2,6 @@ using System;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Audio;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Rendering;
 using Microsoft.Graphics.Canvas;
-using Microsoft.Graphics.Canvas.Text;
 using Microsoft.UI;
 using Windows.Foundation;
 using Windows.System;
@@ -85,7 +84,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Rpg
                 session.FillRectangle(0, 0, 640, 480, Color.FromArgb((byte)Math.Clamp(_state.CRed, 0, 255), 255, 0, 0));
             }
 
-            using var format = new CanvasTextFormat { FontSize = 14 };
+            using var format = HspFont.Create();
             var status = $"{PlayerName()}のデータ 洗脳率:{_state.Sennou:0.0}% 体力:{(int)_state.Tairyoku}";
 
             switch (_phase)

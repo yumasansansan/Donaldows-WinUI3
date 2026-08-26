@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Audio;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Rendering;
 using Microsoft.Graphics.Canvas;
-using Microsoft.Graphics.Canvas.Text;
 using Microsoft.UI;
 using Windows.Foundation;
 using Windows.UI;
@@ -74,7 +73,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Kiss
                 session.DrawImage(_context.Buffers.GetBitmap(BufferId.SneezeStamp), x, y);
             }
 
-            using var format = new CanvasTextFormat { FontSize = 15 };
+            using var format = HspFont.Create();
             session.DrawText($"{_line1}\n{_line2}", new Rect(0, 370, 640, 110), Colors.White, format);
         }
 

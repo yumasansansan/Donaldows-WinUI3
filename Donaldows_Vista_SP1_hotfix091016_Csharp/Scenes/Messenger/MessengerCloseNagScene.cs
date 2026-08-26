@@ -2,7 +2,6 @@ using System;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Audio;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Rendering;
 using Microsoft.Graphics.Canvas;
-using Microsoft.Graphics.Canvas.Text;
 using Microsoft.UI;
 using Windows.Foundation;
 using Windows.UI;
@@ -41,7 +40,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
 
         public void Draw(CanvasDrawingSession session, Size canvasSize)
         {
-            session.Clear(Colors.Black);
+            DesktopBackdrop.Draw(session, _context);
 
             var wx = Random.Shared.Next(-200, 200);
             var wy = Random.Shared.Next(-120, 120);
@@ -52,7 +51,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
             session.FillRectangle(200 + wx, 90 + wy, 350, 320, Colors.White);
             session.DrawImage(_context.Buffers.GetBitmap(BufferId.DonaFace), 90 + wx, 90 + wy);
 
-            using var format = new CanvasTextFormat { FontSize = 14 };
+            using var format = HspFont.Create();
             var lineIndex = Math.Min(_tick / 6, TauntLines.Length - 1);
             session.DrawText(TauntLines[lineIndex], 200 + wx, 342 + wy, Colors.Black, format);
 

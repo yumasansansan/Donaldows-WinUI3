@@ -1,7 +1,7 @@
 using System;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Audio;
+using Donaldows_Vista_SP1_hotfix091016_Csharp.Rendering;
 using Microsoft.Graphics.Canvas;
-using Microsoft.Graphics.Canvas.Text;
 using Microsoft.UI;
 using Windows.Foundation;
 using Windows.System;
@@ -33,7 +33,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Rpg
             session.Clear(Colors.Black);
             var name = string.IsNullOrEmpty(_context.Save.PlayerName) ? "君" : _context.Save.PlayerName;
 
-            using var format = new CanvasTextFormat { FontSize = 16 };
+            using var format = HspFont.Create();
             session.DrawText(
                 $"げ～むお～ば～る～☆\n\n{name}は洗脳されてドナルドにされてしまいました。\n\nドナルド「君がドナルドだなんて嬉しいなあ～ついやっちゃうんDA☆」",
                 new Rect(0, 0, 640, 300), Color.FromArgb(255, 200, 200, 200), format);

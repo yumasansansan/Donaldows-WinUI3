@@ -23,6 +23,10 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Rendering
         FireScroll,        // buffer 21, img/cloud.gif — cloud texture reused as the RPG fire background
         LoveZoom,          // buffer 10, img/love.bmp, *install red zoom transition
         ItDonald,          // buffer 16, img/it.jpg, *cd prank fullscreen zoom
+
+        // buffer.hsp's boot intro: three blink frames and eight talking frames.
+        Wait1, Wait2, Wait3,
+        Sp1, Sp2, Sp3, Sp4, Sp5, Sp6, Sp7, Sp8,
         SneezeStamp,       // buffer 22, img/kusyami.gif
         EnemySprite,       // buffer 17, img/nmini.bmp (dodge-game "mini Donald" enemy)
         PlayerCursorSprite, // buffer 18, img/mg.bmp (dodge-game player cursor)

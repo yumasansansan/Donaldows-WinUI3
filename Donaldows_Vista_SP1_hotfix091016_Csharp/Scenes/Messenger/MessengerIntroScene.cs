@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Audio;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Rendering;
 using Microsoft.Graphics.Canvas;
-using Microsoft.Graphics.Canvas.Text;
 using Microsoft.UI;
 using Windows.Foundation;
 using Windows.UI;
@@ -13,13 +12,12 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
     // Ports *messenger (the fake UAC prompt) and *messtart (window setup plus
     // the scripted Donald dialogue spam), handing off to *messelect.
     //
-    // Timings follow HSP's 10ms `wait` unit: the UAC dialog holds still for
-    // four seconds before the glitch jitter starts, and the online/offline
-    // and toast beats are seconds rather than the fractions an earlier
-    // version of this port used.
+    // The UAC gag is a swarm, not a shake: the original's 100-iteration jitter
+    // loop redraws the dialog at a fresh random offset every frame WITHOUT
+    // clearing, so copies pile up all over the screen. Each drawn copy is kept
+    // here for the same effect.
     //
-    // Not reproduced: the dialogue's scroll-accumulation (HSP's `mes` appends
-    // into a scrolling text buffer; here each beat replaces the previous line).
+    // All of this is drawn over the captured desktop, not over black.
     public sealed class MessengerIntroScene : IScene
     {
         private readonly record struct Beat(string Text, TimeSpan Wait, SoundId? Sound);
@@ -29,8 +27,9 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
         // *messenger: wait 100, draw, mmplay 50, wait 400, jitter loop, wait 100.
         private static readonly TimeSpan UacSoundAt = TimeSpan.FromMilliseconds(1000);
         private static readonly TimeSpan UacJitterAt = TimeSpan.FromMilliseconds(5000);
-        private static readonly TimeSpan UacSettleAt = TimeSpan.FromMilliseconds(6000);
-        private static readonly TimeSpan UacDoneAt = TimeSpan.FromMilliseconds(7000);
+        private static readonly TimeSpan UacSettleAt = TimeSpan.FromMilliseconds(6500);
+        private static readonly TimeSpan UacDoneAt = TimeSpan.FromMilliseconds(7500);
+        private static readonly TimeSpan UacJitterInterval = TimeSpan.FromMilliseconds(15);
 
         // *messtart: wait 300, mmplay 47 + toast, wait 400, wait 100, then the
         // chat frame is drawn and wait 300 precedes the first dialogue line.
@@ -44,10 +43,14 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
         private Phase _phase;
         private TimeSpan _phaseElapsed;
 
+        private readonly List<(float X, float Y)> _uacSwarm = new();
+        private TimeSpan _sinceJitter;
+
         private Beat[] _beats = Array.Empty<Beat>();
         private int _beatIndex;
         private TimeSpan _beatElapsed;
-        private bool _onlineSoundPlayed;
+        private bool _cueSoundPlayed;
+        private readonly List<(string Text, Color Color)> _log = new();
 
         public void Enter(SceneContext context, object? payload)
         {
@@ -55,7 +58,10 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
             _state = payload as MessengerState ?? new MessengerState();
             _phase = Phase.Uac;
             _phaseElapsed = TimeSpan.Zero;
-            _onlineSoundPlayed = false;
+            _cueSoundPlayed = false;
+            _uacSwarm.Clear();
+            _sinceJitter = TimeSpan.Zero;
+            _log.Clear();
 
             _beats = BuildBeats(TimeSpan.FromMilliseconds(_state.MespMilliseconds));
             _beatIndex = 0;
@@ -66,8 +72,6 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
         {
             const string spam = "ドナルド「汚話しようよ！！汚話しようよ！！」";
 
-            // The original's first line waits `wait 100` (one second); every
-            // repeat after that waits `mesp`.
             var beats = new List<Beat>
             {
                 new("ドナルド「汚話しようよ！！」", TimeSpan.FromMilliseconds(1000), SoundId.Type),
@@ -97,6 +101,8 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
 
         public void Draw(CanvasDrawingSession session, Size canvasSize)
         {
+            DesktopBackdrop.Draw(session, _context);
+
             switch (_phase)
             {
                 case Phase.Uac:
@@ -106,55 +112,58 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
                     DrawPrologue(session);
                     break;
                 case Phase.Dialogue:
-                    DrawDialogue(session);
+                    MessengerChrome.DrawChatWindow(session, _context);
+                    MessengerChrome.DrawLog(session, _log);
                     break;
             }
         }
 
         private void DrawUac(CanvasDrawingSession session)
         {
-            session.Clear(Colors.Black);
+            foreach (var (x, y) in _uacSwarm)
+            {
+                DrawUacDialog(session, x, y);
+            }
 
-            var jittering = _phaseElapsed >= UacJitterAt && _phaseElapsed < UacSettleAt;
-            var offsetX = jittering ? Random.Shared.Next(-40, 40) : 0;
-            var offsetY = jittering ? Random.Shared.Next(-40, 40) : 0;
+            if (_phaseElapsed < UacJitterAt)
+            {
+                DrawUacDialog(session, 0, 0);
+            }
+        }
 
-            session.FillRectangle(180 + offsetX, 130 + offsetY, 300, 200, Color.FromArgb(255, 0, 20, 20));
+        private void DrawUacDialog(CanvasDrawingSession session, float dx, float dy)
+        {
+            session.FillRectangle(180 + dx, 130 + dy, 300, 200, Color.FromArgb(255, 0, 20, 20));
 
-            using var titleFormat = new CanvasTextFormat { FontSize = 14 };
-            session.FillRectangle(200 + offsetX, 131 + offsetY, 220, 18, Color.FromArgb(255, 255, 50, 0));
-            session.DrawText("ユーザーアカウント制御", 200 + offsetX, 131 + offsetY, Colors.White, titleFormat);
+            using var format = HspFont.Create();
+            session.FillRectangle(200 + dx, 131 + dy, 220, 18, Color.FromArgb(255, 255, 50, 0));
+            session.DrawText("ユーザーアカウント制御", 200 + dx, 131 + dy, Colors.White, format);
+            session.DrawText("続行するにはあなたの許可が必要です", 190 + dx, 150 + dy, Colors.White, format);
 
-            using var bodyFormat = new CanvasTextFormat { FontSize = 13 };
-            session.DrawText("続行するにはあなたの許可が必要です", 190 + offsetX, 150 + offsetY, Colors.White, bodyFormat);
+            session.FillRectangle(190 + dx, 168 + dy, 280, 132, Colors.White);
+            session.DrawText("あなたが開始した操作である場合は\n続行してください。", 190 + dx, 168 + dy, Colors.Black, format);
+            session.DrawImage(_context.Buffers.GetBitmap(BufferId.DonaFace), 190 + dx, 210 + dy);
+            session.DrawText("　　　ドナルドウズメッセンジャー(ver0.09\n\n　　　MicroosoftDonaldows", 190 + dx, 220 + dy, Colors.Black, format);
 
-            session.FillRectangle(190 + offsetX, 168 + offsetY, 280, 132, Colors.White);
-            session.DrawText("あなたが開始した操作である場合は\n続行してください。", 190 + offsetX, 168 + offsetY, Colors.Black, bodyFormat);
-            session.DrawImage(_context.Buffers.GetBitmap(BufferId.DonaFace), 190 + offsetX, 210 + offsetY);
-            session.DrawText("　　　ドナルドウズメッセンジャー(ver0.09\n\n　　　MicroosoftDonaldows", 190 + offsetX, 220 + offsetY, Colors.Black, bodyFormat);
-
-            session.FillRectangle(400 + offsetX, 302 + offsetY, 70, 18, Colors.White);
-            session.DrawText("続　行", 410 + offsetX, 302 + offsetY, Colors.Black, bodyFormat);
+            session.FillRectangle(400 + dx, 302 + dy, 70, 18, Colors.White);
+            session.DrawText("続　行", 410 + dx, 302 + dy, Colors.Black, format);
         }
 
         private void DrawPrologue(CanvasDrawingSession session)
         {
-            session.Clear(Colors.Black);
-
             if (_phaseElapsed >= ChatFrameAt)
             {
-                DrawChatWindowFrame(session, _context.Buffers);
+                MessengerChrome.DrawChatWindow(session, _context);
                 return;
             }
 
-            // Contact-list window.
             session.FillRectangle(182, 81, 256, 300, Color.FromArgb(255, 0, 20, 20));
             session.FillRectangle(200, 83, 220, 18, Color.FromArgb(255, 255, 50, 0));
-            using var titleFormat = new CanvasTextFormat { FontSize = 13 };
-            session.DrawText("ドナルドウズ　メッセンジャー(ver0.09", 200, 84, Colors.White, titleFormat);
+
+            using var format = HspFont.Create();
+            session.DrawText("ドナルドウズ　メッセンジャー(ver0.09", 200, 83, Colors.White, format);
             session.FillRectangle(188, 102, 244, 273, Colors.White);
 
-            using var format = new CanvasTextFormat { FontSize = 13 };
             if (_phaseElapsed < OnlineAt)
             {
                 session.DrawText("オンライン(0)\nオフライン(4444)", 193, 107, Colors.Black, format);
@@ -171,36 +180,6 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
             }
         }
 
-        internal static void DrawChatWindowFrame(CanvasDrawingSession session, BufferManager buffers, bool offlineLabel = false)
-        {
-            session.FillRectangle(80, 60, 480, 360, Color.FromArgb(255, 0, 20, 20));
-            session.FillRectangle(98, 62, 360, 18, Color.FromArgb(255, 255, 50, 0));
-            using var titleFormat = new CanvasTextFormat { FontSize = 13 };
-            session.DrawText("ドナルドウズ　メッセンジャー 会話画面", 98, 63, Colors.White, titleFormat);
-
-            session.FillRectangle(200, 90, 350, 320, Colors.White);
-            session.FillRectangle(496, 62, 54, 18, Colors.White);
-            session.FillRectangle(98, 300, 81, 36, Colors.White);
-
-            using var format = new CanvasTextFormat { FontSize = 13 };
-            session.DrawText(offlineLabel ? "ドナルドの\n発言を許可" : "ドナルドの\n発言を拒否", 100, 300, Colors.Black, format);
-            session.DrawText("[X]CLOSE", 500, 62, Colors.Black, format);
-
-            session.FillRectangle(201, 389, 348, 20, Colors.White);
-            session.DrawText("ドナルドがメッセージを書いています...", 200, 390, Colors.DarkCyan, format);
-            session.DrawImage(buffers.GetBitmap(BufferId.DonaFace), 90, 90);
-        }
-
-        private void DrawDialogue(CanvasDrawingSession session)
-        {
-            session.Clear(Colors.Black);
-            DrawChatWindowFrame(session, _context.Buffers);
-
-            using var format = new CanvasTextFormat { FontSize = 14 };
-            var beat = _beats[Math.Min(_beatIndex, _beats.Length - 1)];
-            session.DrawText(beat.Text, 200, 342, Colors.Black, format);
-        }
-
         public SceneTransition? Update(TimeSpan delta)
         {
             _phaseElapsed += delta;
@@ -208,25 +187,12 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
             switch (_phase)
             {
                 case Phase.Uac:
-                    if (_phaseElapsed >= UacSoundAt && !_onlineSoundPlayed)
-                    {
-                        _onlineSoundPlayed = true;
-                        _context.Sound.PlayEffect(SoundId.Uac);
-                    }
-
-                    if (_phaseElapsed >= UacDoneAt)
-                    {
-                        _phase = Phase.Prologue;
-                        _phaseElapsed = TimeSpan.Zero;
-                        _onlineSoundPlayed = false;
-                    }
-
-                    return null;
+                    return UpdateUac(delta);
 
                 case Phase.Prologue:
-                    if (_phaseElapsed >= OnlineAt && !_onlineSoundPlayed)
+                    if (_phaseElapsed >= OnlineAt && !_cueSoundPlayed)
                     {
-                        _onlineSoundPlayed = true;
+                        _cueSoundPlayed = true;
                         _context.Sound.PlayEffect(SoundId.Online);
                     }
 
@@ -236,6 +202,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
                         _phaseElapsed = TimeSpan.Zero;
                         _beatIndex = 0;
                         _beatElapsed = TimeSpan.Zero;
+                        _log.Add((_beats[0].Text, Colors.Black));
                         _context.Sound.PlayEffect(_beats[0].Sound ?? SoundId.Type);
                     }
 
@@ -244,6 +211,37 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
                 default:
                     return UpdateDialogue(delta);
             }
+        }
+
+        private SceneTransition? UpdateUac(TimeSpan delta)
+        {
+            if (_phaseElapsed >= UacSoundAt && !_cueSoundPlayed)
+            {
+                _cueSoundPlayed = true;
+                _context.Sound.PlayEffect(SoundId.Uac);
+            }
+
+            if (_phaseElapsed >= UacJitterAt && _phaseElapsed < UacSettleAt)
+            {
+                _sinceJitter += delta;
+                if (_sinceJitter >= UacJitterInterval && _uacSwarm.Count < 100)
+                {
+                    _sinceJitter = TimeSpan.Zero;
+                    _context.Sound.PlayEffect(SoundId.Uac);
+                    _uacSwarm.Add((
+                        Random.Shared.Next(0, 640) - Random.Shared.Next(0, 700),
+                        Random.Shared.Next(0, 480) - Random.Shared.Next(0, 350)));
+                }
+            }
+
+            if (_phaseElapsed >= UacDoneAt)
+            {
+                _phase = Phase.Prologue;
+                _phaseElapsed = TimeSpan.Zero;
+                _cueSoundPlayed = false;
+            }
+
+            return null;
         }
 
         private SceneTransition? UpdateDialogue(TimeSpan delta)
@@ -262,6 +260,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
                 return new SceneTransition(SceneId.MessengerChat, _state);
             }
 
+            _log.Add((_beats[_beatIndex].Text, Colors.Black));
             if (_beats[_beatIndex].Sound is { } sound)
             {
                 _context.Sound.PlayEffect(sound);

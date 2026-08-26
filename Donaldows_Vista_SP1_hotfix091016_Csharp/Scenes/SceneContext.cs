@@ -16,6 +16,16 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes
         // Ports `gsel 0,-1`, which hides the window while the app keeps
         // running — the state *virus idles in between nag popups.
         public required Action MinimizeWindow { get; init; }
+
+        // *setumei needs a real IME-capable text field, so it lives in XAML
+        // rather than on the canvas; the boot intro hands off to it through this.
+        public required Action ShowNameEntry { get; init; }
+
+        // Ports the window jitter the original applies with `width`. The
+        // start-menu pop-up passes only p4, so it shakes VERTICALLY only
+        // (`width ,,,p+rnd(26-cnt)-rnd(26-cnt)`); the RPG punch passes p3 and
+        // p4 and shakes both axes. Call with (0, 0) to stop and restore.
+        public required Action<int, int> ShakeWindow { get; init; }
         public required SaveData Save { get; init; }
         public required SaveManager SaveManager { get; init; }
         public required AppState AppState { get; init; }

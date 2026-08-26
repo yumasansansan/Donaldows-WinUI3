@@ -27,6 +27,11 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes
         private readonly Queue<VirtualKey> _pendingKeys = new();
         private SceneTransition? _pendingForced;
 
+        public const int VirtualWidth = 640;
+        public const int VirtualHeight = 480;
+
+        private CanvasRenderTarget? _frame;
+
         public SceneManager(SceneContext context, Dictionary<SceneId, Func<IScene>> factories, SceneId initial)
         {
             _context = context;
@@ -126,7 +131,24 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes
             ApplyTransition(_current.Update(delta));
         }
 
-        public void Draw(CanvasDrawingSession session, Size canvasSize) => _current.Draw(session, canvasSize);
+        // HSP draws into a framebuffer that PERSISTS between frames — `redraw`
+        // only controls when it is presented, and nothing is erased until the
+        // script explicitly calls cls/boxf. Scenes therefore draw into a
+        // render target that is never implicitly cleared, which is what makes
+        // the original's accumulating effects work (repeatedly alpha-blending
+        // the same image until it turns opaque, dialogs piling up into a
+        // swarm, sprites scattering over whatever was already on screen).
+        public void Draw(CanvasDrawingSession target, ICanvasResourceCreatorWithDpi device, Size canvasSize)
+        {
+            _frame ??= new CanvasRenderTarget(device, VirtualWidth, VirtualHeight, device.Dpi);
+
+            using (var frameSession = _frame.CreateDrawingSession())
+            {
+                _current.Draw(frameSession, new Size(VirtualWidth, VirtualHeight));
+            }
+
+            target.DrawImage(_frame, new Rect(0, 0, canvasSize.Width, canvasSize.Height));
+        }
 
         private void ApplyTransition(SceneTransition? transition)
         {

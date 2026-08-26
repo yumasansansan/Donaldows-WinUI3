@@ -78,9 +78,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Desktop
 
         public void Draw(CanvasDrawingSession session, Size canvasSize)
         {
-            session.DrawImage(_context.Buffers.GetBitmap(BufferId.DesktopBackground), new Rect(0, 0, 640, 480));
-            session.FillRectangle(0, TaskbarTop, 640, 20, _context.Buffers.GetColor(BufferId.TaskbarBackdrop));
-            session.DrawImage(_context.Buffers.GetBitmap(BufferId.TaskbarIcon), 0, TaskbarTop);
+            DesktopBackdrop.Draw(session, _context);
 
             session.DrawImage(_context.Buffers.GetBitmap(BufferId.MascotSprite), new Rect(0, MenuAnchorY, 182, 240));
 

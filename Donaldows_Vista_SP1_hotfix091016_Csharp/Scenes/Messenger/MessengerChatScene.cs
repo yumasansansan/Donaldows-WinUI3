@@ -1,7 +1,8 @@
 using System;
+using System.Collections.Generic;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Audio;
+using Donaldows_Vista_SP1_hotfix091016_Csharp.Rendering;
 using Microsoft.Graphics.Canvas;
-using Microsoft.Graphics.Canvas.Text;
 using Microsoft.UI;
 using Windows.Foundation;
 using Windows.System;
@@ -16,8 +17,6 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
 
         private enum Phase { Idle, Accept, Reject }
 
-        private static readonly Rect LogoffBox = new(98, 300, 81, 36);
-        private static readonly Rect CloseBox = new(496, 62, 54, 18);
 
         private SceneContext _context = null!;
         private MessengerState _state = null!;
@@ -26,35 +25,31 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
         private Beat[] _beats = Array.Empty<Beat>();
         private int _beatIndex;
         private TimeSpan _beatElapsed;
+        private readonly List<(string Text, Color Color)> _log = new();
 
         public void Enter(SceneContext context, object? payload)
         {
             _context = context;
             _state = payload as MessengerState ?? new MessengerState();
             _phase = Phase.Idle;
+            _log.Clear();
+            _log.Add(("ドナルド「ドナルドの事好き？」", Colors.Black));
         }
 
         public void Draw(CanvasDrawingSession session, Size canvasSize)
         {
-            session.Clear(Colors.Black);
-            MessengerIntroScene.DrawChatWindowFrame(session, _context.Buffers);
-
-            using var format = new CanvasTextFormat { FontSize = 14 };
+            DesktopBackdrop.Draw(session, _context);
+            MessengerChrome.DrawChatWindow(session, _context);
+            MessengerChrome.DrawLog(session, _log);
 
             if (_phase == Phase.Idle)
             {
-                session.DrawText("ドナルド「ドナルドの事好き？」", 200, 342, Colors.Black, format);
-
                 session.FillRectangle(0, 400, 640, 80, Colors.White);
-                using var promptFormat = new CanvasTextFormat { FontSize = 13 };
+                using var promptFormat = HspFont.Create();
                 session.DrawText(
                     "どうする？？\n1.「もちろんさあ～☆」とコメントをうつ\n2.「すまん、また今度話さねえ？」とコメントをうつ\n「１」キーか「２」キーを押してください。",
                     0, 400, Colors.Black, promptFormat);
-                return;
             }
-
-            var beat = _beats[Math.Min(_beatIndex, _beats.Length - 1)];
-            session.DrawText(beat.Text, 200, 342, beat.Color, format);
         }
 
         public SceneTransition? Update(TimeSpan delta)
@@ -76,6 +71,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
 
             if (_beatIndex < _beats.Length)
             {
+                _log.Add((_beats[_beatIndex].Text, _beats[_beatIndex].Color));
                 if (_beats[_beatIndex].Sound is { } sound)
                 {
                     _context.Sound.PlayEffect(sound);
@@ -103,12 +99,12 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
             }
 
             var point = new Point(x, y);
-            if (LogoffBox.Contains(point))
+            if (MessengerChrome.LogoffBox.Contains(point))
             {
                 return new SceneTransition(SceneId.MessengerOffline, _state);
             }
 
-            if (CloseBox.Contains(point))
+            if (MessengerChrome.CloseBox.Contains(point))
             {
                 return new SceneTransition(SceneId.MessengerCloseNag);
             }
@@ -135,6 +131,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
                     new Beat($"{name}「もちろんさあ～☆」", TimeSpan.FromMilliseconds(3000), null, Colors.Black),
                     new Beat("ドナルド「ドナルドの事が大好きだなんて……」", TimeSpan.FromMilliseconds(3000), SoundId.Uresiina, Colors.Black),
                 };
+                _log.Add((_beats[0].Text, _beats[0].Color));
                 return null;
             }
 
@@ -149,6 +146,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
                     new Beat("ドナルド「もちろんさあ～☆今度一緒に汚話しよ\nうよ！」", TimeSpan.FromMilliseconds(5000), SoundId.Motikon, Colors.Black),
                     new Beat("ドナルドがログアウトしました。", TimeSpan.FromMilliseconds(3000), null, Color.FromArgb(255, 100, 100, 100)),
                 };
+                _log.Add((_beats[0].Text, _beats[0].Color));
                 return null;
             }
 

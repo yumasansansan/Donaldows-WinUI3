@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Audio;
+using Donaldows_Vista_SP1_hotfix091016_Csharp.Rendering;
 using Microsoft.Graphics.Canvas;
-using Microsoft.Graphics.Canvas.Text;
 using Microsoft.UI;
 using Windows.Foundation;
 using Windows.System;
@@ -38,7 +38,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Cmd
             session.FillRectangle(20, 60, 600, 380, Colors.White);
             session.FillRectangle(0, 460, 640, 20, Colors.Black);
 
-            using var format = new CanvasTextFormat { FontSize = 13 };
+            using var format = HspFont.Create();
             session.DrawText("UntitLOO!(無題) - NOTEPAD", 0, 0, Colors.White, format);
             session.DrawText("ファイる～☆|編集|書式|表示|ヘルプ|　←このメニュは出来てません。", 10, 20, Colors.Black, format);
 

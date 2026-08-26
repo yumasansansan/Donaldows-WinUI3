@@ -55,24 +55,36 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
         private SoundManager? _sound;
         private SceneContext? _context;
         private Dictionary<SceneId, Func<IScene>>? _factories;
-        private bool _bootRequested;
         private bool _allowClose;
         private bool _cursorHidden;
         private readonly CursorHostGrid _cursorHost;
+        private PointInt32? _restingWindowPosition;
 
         public MainWindow()
         {
             InitializeComponent();
 
-            // Wrap the XAML content so the cursor can be hidden during the
-            // dodge game; see CursorHostGrid for why this isn't done in markup.
-            var content = (FrameworkElement)Content;
-            Content = null;
-            _cursorHost = CursorHostGrid.Wrap(content);
-            Content = _cursorHost;
+            // Input surface layered directly over the canvas — it must be the
+            // pointer hit-test target for the cursor to be hideable, so all
+            // pointer and key handling lives on it. See CursorHostGrid.
+            _cursorHost = new CursorHostGrid
+            {
+                Width = 640,
+                Height = 480,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            _cursorHost.KeyDown += RootGrid_KeyDown;
+            _cursorHost.PointerMoved += MainCanvas_PointerMoved;
+            _cursorHost.PointerPressed += MainCanvas_PointerPressed;
+            RootGrid.Children.Insert(RootGrid.Children.IndexOf(MainCanvas) + 1, _cursorHost);
 
             _save = _saveManager.Load();
             NameTextBox.Text = _save.PlayerName;
+
+            // buffer.hsp's opening animation runs before *setumei, so the name
+            // entry overlay starts hidden and is revealed by SetumeiScene.
+            SetumeiOverlay.Visibility = Visibility.Collapsed;
 
             RootGrid.Loaded += RootGrid_Loaded;
             Closed += MainWindow_Closed;
@@ -121,15 +133,19 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
             }
         }
 
-        // CanvasAnimatedControl drives Update/Draw from its own game-loop thread.
-        // If the window starts tearing down while that thread is still mid-frame
-        // (touching WinRT objects being disposed), the process can fail fast on
-        // exit. Pausing the control and stopping all sound synchronously on the
-        // UI thread before Close() proceeds avoids that race.
+        // CanvasAnimatedControl drives Update/Draw on its own game-loop thread.
+        // Merely pausing it does not wait for an in-flight frame, so tearing the
+        // window down could leave that thread touching resources that were
+        // already released — which surfaced as a 0x80000003 fail-fast on exit.
+        // RemoveFromVisualTree is Win2D's documented shutdown for this control:
+        // it stops the loop and releases its resources deterministically.
         private void MainWindow_Closed(object sender, WindowEventArgs args)
         {
-            MainCanvas.Paused = true;
+            _sceneManager = null;
             _sound?.StopAll();
+
+            MainCanvas.Paused = true;
+            MainCanvas.RemoveFromVisualTree();
         }
 
         private void MainCanvas_CreateResources(CanvasAnimatedControl sender, CanvasCreateResourcesEventArgs args)
@@ -151,6 +167,35 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
                 {
                     _allowClose = true;
                     Close();
+                }),
+                ShakeWindow = (amplitudeX, amplitudeY) => DispatcherQueue.TryEnqueue(() =>
+                {
+                    if (amplitudeX <= 0 && amplitudeY <= 0)
+                    {
+                        if (_restingWindowPosition is { } resting)
+                        {
+                            AppWindow.Move(resting);
+                            _restingWindowPosition = null;
+                        }
+
+                        return;
+                    }
+
+                    // Captured on the first frame of each shake, not once for
+                    // the lifetime of the window — otherwise dragging the
+                    // window and then shaking would snap it back to where it
+                    // first opened.
+                    _restingWindowPosition ??= AppWindow.Position;
+                    var home = _restingWindowPosition.Value;
+
+                    AppWindow.Move(new PointInt32(
+                        home.X + (amplitudeX > 0 ? Random.Shared.Next(-amplitudeX, amplitudeX + 1) : 0),
+                        home.Y + (amplitudeY > 0 ? Random.Shared.Next(-amplitudeY, amplitudeY + 1) : 0)));
+                }),
+                ShowNameEntry = () => DispatcherQueue.TryEnqueue(() =>
+                {
+                    SetumeiOverlay.Visibility = Visibility.Visible;
+                    NameTextBox.Focus(FocusState.Programmatic);
                 }),
                 MinimizeWindow = () => DispatcherQueue.TryEnqueue(() =>
                 {
@@ -176,6 +221,8 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
                 [SceneId.Logoff] = () => new LogoffScene(),
                 [SceneId.Screensaver] = () => new ScreensaverScene(),
                 [SceneId.VirusNag] = () => new VirusNagScene(),
+                [SceneId.BootIntro] = () => new BootIntroScene(),
+                [SceneId.Setumei] = () => new SetumeiScene(),
                 [SceneId.BiosPost] = () => new BiosPostScene(),
                 [SceneId.BiosMenu] = () => new BiosMenuScene(),
                 [SceneId.StartBoot] = () => new StartBootScene(),
@@ -195,12 +242,8 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
                 [SceneId.RpgGameOver] = () => new RpgGameOverScene(),
             };
 
-            // The player may have already clicked "起動" on the XAML overlay
-            // before this async init finished; start the boot chain now if so.
-            if (_bootRequested)
-            {
-                StartBootChain();
-            }
+            _sceneManager = new SceneManager(_context, _factories, SceneId.BootIntro);
+            DispatcherQueue.TryEnqueue(() => _cursorHost.Focus(FocusState.Programmatic));
         }
 
         private void StartButton_Click(object sender, RoutedEventArgs e)
@@ -209,18 +252,8 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
             _saveManager.Save(_save);
 
             SetumeiOverlay.Visibility = Visibility.Collapsed;
-            _bootRequested = true;
-
-            if (_context is not null && _factories is not null)
-            {
-                StartBootChain();
-            }
-        }
-
-        private void StartBootChain()
-        {
-            _sceneManager = new SceneManager(_context!, _factories!, SceneId.BiosPost);
-            RootGrid.Focus(FocusState.Programmatic);
+            _sceneManager?.ForceTransition(SceneId.BiosPost);
+            _cursorHost.Focus(FocusState.Programmatic);
         }
 
         private void MainCanvas_Update(ICanvasAnimatedControl sender, CanvasAnimatedUpdateEventArgs args)
@@ -239,19 +272,19 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
 
         private void MainCanvas_Draw(ICanvasAnimatedControl sender, CanvasAnimatedDrawEventArgs args)
         {
-            _sceneManager?.Draw(args.DrawingSession, sender.Size);
+            _sceneManager?.Draw(args.DrawingSession, sender, sender.Size);
         }
 
         private void MainCanvas_PointerMoved(object sender, PointerRoutedEventArgs e)
         {
-            var point = e.GetCurrentPoint(MainCanvas).Position;
+            var point = e.GetCurrentPoint(_cursorHost).Position;
             _sceneManager?.NotifyPointerMoved((float)point.X, (float)point.Y);
         }
 
         private void MainCanvas_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
-            RootGrid.Focus(FocusState.Programmatic);
-            var point = e.GetCurrentPoint(MainCanvas).Position;
+            _cursorHost.Focus(FocusState.Programmatic);
+            var point = e.GetCurrentPoint(_cursorHost).Position;
             _sceneManager?.NotifyPointerPressed((float)point.X, (float)point.Y);
         }
 

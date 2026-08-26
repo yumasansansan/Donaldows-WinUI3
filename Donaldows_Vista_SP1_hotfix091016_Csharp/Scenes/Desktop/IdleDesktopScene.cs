@@ -2,7 +2,6 @@ using System;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Audio;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Rendering;
 using Microsoft.Graphics.Canvas;
-using Microsoft.Graphics.Canvas.Text;
 using Microsoft.UI;
 using Windows.Foundation;
 using Windows.UI;
@@ -46,23 +45,18 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Desktop
             session.FillRectangle(0, TaskbarTop, 640, 20, _context.Buffers.GetColor(BufferId.TaskbarBackdrop));
             session.DrawImage(_context.Buffers.GetBitmap(BufferId.TaskbarIcon), 0, TaskbarTop);
 
-            using var startLabelFormat = new CanvasTextFormat { FontSize = 14 };
+            using var startLabelFormat = HspFont.Create();
             session.DrawText("←スタートボタン", 20, TaskbarTop, Colors.White, startLabelFormat);
 
-            using var clockFormat = new CanvasTextFormat { FontSize = 14, HorizontalAlignment = CanvasHorizontalAlignment.Right };
+            using var clockFormat = HspFont.Create();
             var now = DateTime.Now;
             var dow = now.DayOfWeek.ToString().Substring(0, 3).ToUpperInvariant();
             var clockText = $"{now:yyyy/MM/dd}[{dow}]{now:HH:mm}";
-            session.DrawText(clockText, new Rect(475, TaskbarTop + 1, 160, 18), Colors.DeepSkyBlue, clockFormat);
+            session.DrawText(clockText, 475, TaskbarTop + 1, Colors.DeepSkyBlue, clockFormat);
         }
 
         public SceneTransition? OnPointerPressed(float x, float y)
         {
-            if (x < StartButtonHotspotWidth && y > TaskbarTop)
-            {
-                return new SceneTransition(SceneId.RooPopup);
-            }
-
             if (ClockHotspot.Contains(new Point(x, y)))
             {
                 return new SceneTransition(SceneId.AboutPopup);
@@ -75,7 +69,13 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Desktop
         public SceneTransition? OnPointerMoved(float x, float y)
         {
             _idleElapsed = TimeSpan.Zero;
-            return null;
+
+            // *ham tests the start-button corner against the plain mouse
+            // position every iteration — merely moving the pointer there opens
+            // the menu, no click required.
+            return x < StartButtonHotspotWidth && y > TaskbarTop
+                ? new SceneTransition(SceneId.RooPopup)
+                : null;
         }
 
         public SceneTransition? Update(TimeSpan delta)

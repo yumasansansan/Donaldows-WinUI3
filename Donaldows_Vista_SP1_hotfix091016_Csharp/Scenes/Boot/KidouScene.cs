@@ -8,24 +8,24 @@ using Windows.UI;
 
 namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
 {
-    // Ports *kidou, the post-install boot logo sequence: a quick fade up to
-    // Donald, a slow fade to the eyes-shining variant, a quick fade to black,
-    // then a hold before the login chime hands off to the desktop.
+    // Ports *kidou, the post-install boot logo sequence.
     //
-    // The original's fades top out around 40% alpha (its loop counters only
-    // reach 98/99 out of 255), which is why the logo never becomes fully
-    // opaque; that ceiling is preserved here.
+    // The original never clears between the blends — it repeatedly composites
+    // the same picture at a rising alpha onto the persisted framebuffer, so the
+    // image builds up to fully opaque even though no single pass exceeds ~40%.
+    // Drawing one pass per frame here reproduces that; an earlier version drew
+    // a single capped-alpha pass, which is why the logo stayed dim and then
+    // appeared to darken.
     public sealed class KidouScene : IScene
     {
-        private const float AlphaCeiling = 99f / 255f;
         private static readonly Rect FullScreen = new(0, 0, 640, 480);
 
         private static readonly TimeSpan BlackHold = TimeSpan.FromMilliseconds(1000);
-        private static readonly TimeSpan NormalFade = TimeSpan.FromMilliseconds(50);
+        private static readonly TimeSpan NormalFade = TimeSpan.FromMilliseconds(500);
         private static readonly TimeSpan Gap1 = TimeSpan.FromMilliseconds(100);
         private static readonly TimeSpan EyesFade = TimeSpan.FromMilliseconds(1000);
         private static readonly TimeSpan Gap2 = TimeSpan.FromMilliseconds(100);
-        private static readonly TimeSpan BlackFade = TimeSpan.FromMilliseconds(50);
+        private static readonly TimeSpan BlackFade = TimeSpan.FromMilliseconds(500);
         private static readonly TimeSpan PostHold = TimeSpan.FromMilliseconds(1000);
         private static readonly TimeSpan PreLogin = TimeSpan.FromMilliseconds(500);
         private static readonly TimeSpan PostLogin = TimeSpan.FromMilliseconds(500);
@@ -39,49 +39,68 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
 
         private SceneContext _context = null!;
         private TimeSpan _elapsed;
+        private bool _cleared;
         private bool _startPlayed;
         private bool _loginPlayed;
+        private bool _finalCleared;
 
         public void Enter(SceneContext context, object? payload)
         {
             _context = context;
             _elapsed = TimeSpan.Zero;
+            _cleared = false;
             _startPlayed = false;
             _loginPlayed = false;
+            _finalCleared = false;
         }
 
         public void Draw(CanvasDrawingSession session, Size canvasSize)
         {
-            session.Clear(Colors.Black);
-
-            if (_elapsed < NormalFadeAt || _elapsed >= ClearAt)
+            // cls 4 once on entry; after that the framebuffer is left to build up.
+            if (!_cleared)
             {
+                session.Clear(Colors.Black);
+                _cleared = true;
                 return;
             }
 
-            var normal = _context.Buffers.GetBitmap(BufferId.DonaldNormal);
-            var eyes = _context.Buffers.GetBitmap(BufferId.DonaldEyesShine);
-
-            if (_elapsed < EyesFadeAt)
+            if (_elapsed >= ClearAt)
             {
-                var t = Math.Clamp((float)((_elapsed - NormalFadeAt) / NormalFade), 0f, 1f);
-                session.DrawImage(normal, FullScreen, normal.Bounds, t * AlphaCeiling);
+                if (!_finalCleared)
+                {
+                    session.Clear(Colors.Black);
+                    _finalCleared = true;
+                }
+
                 return;
             }
 
-            session.DrawImage(normal, FullScreen, normal.Bounds, AlphaCeiling);
-
-            if (_elapsed < BlackFadeAt)
+            // Each pass blends at roughly the alpha the original's loop counter
+            // reaches at the same point, and the passes accumulate.
+            if (_elapsed >= BlackFadeAt)
             {
-                var t = Math.Clamp((float)((_elapsed - EyesFadeAt) / EyesFade), 0f, 1f);
-                session.DrawImage(eyes, FullScreen, eyes.Bounds, t * AlphaCeiling);
+                session.FillRectangle(FullScreen, Color.FromArgb(Alpha(_elapsed - BlackFadeAt, BlackFade), 0, 0, 0));
                 return;
             }
 
-            session.DrawImage(eyes, FullScreen, eyes.Bounds, AlphaCeiling);
+            if (_elapsed >= EyesFadeAt)
+            {
+                var eyes = _context.Buffers.GetBitmap(BufferId.DonaldEyesShine);
+                session.DrawImage(eyes, FullScreen, eyes.Bounds, Alpha(_elapsed - EyesFadeAt, EyesFade) / 255f);
+                return;
+            }
 
-            var fade = Math.Clamp((float)((_elapsed - BlackFadeAt) / BlackFade), 0f, 1f);
-            session.FillRectangle(FullScreen, Color.FromArgb((byte)(fade * AlphaCeiling * 255f), 0, 0, 0));
+            if (_elapsed >= NormalFadeAt)
+            {
+                var normal = _context.Buffers.GetBitmap(BufferId.DonaldNormal);
+                session.DrawImage(normal, FullScreen, normal.Bounds, Alpha(_elapsed - NormalFadeAt, NormalFade) / 255f);
+            }
+        }
+
+        private static byte Alpha(TimeSpan into, TimeSpan over)
+        {
+            var t = Math.Clamp((float)(into / over), 0f, 1f);
+            return (byte)Math.Clamp(t * 99f, 1f, 99f);
         }
 
         public SceneTransition? Update(TimeSpan delta)

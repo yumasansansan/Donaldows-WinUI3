@@ -44,7 +44,6 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Dodge
 
         private float _deathX, _deathY;
         private string _resultMessage = "";
-        private bool _isNewHighScore;
         private SceneId? _pendingReward;
 
         public void Enter(SceneContext context, object? payload)
@@ -79,7 +78,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Dodge
         private static void DrawIntro(CanvasDrawingSession session)
         {
             session.Clear(Colors.Black);
-            using var format = new CanvasTextFormat { FontSize = 14 };
+            using var format = HspFont.Create();
             session.DrawText(
                 "説明：グリマスをマウスで動かして、ドナルドをよけてください\n" +
                 "得点があがるとドナルドの動きがはやくなってきます。\n" +
@@ -108,7 +107,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Dodge
 
             session.DrawImage(_context.Buffers.GetBitmap(BufferId.PlayerCursorSprite), _mouseX - 15, _mouseY - 19);
 
-            using var format = new CanvasTextFormat { FontSize = 14 };
+            using var format = HspFont.Create();
             session.DrawText($"H,SCORE:{_context.Save.HighScore}pt", 0, 0, Colors.White, format);
             session.DrawText($"SCORE  :{_score}pt", 0, 16, Colors.White, format);
         }
@@ -123,10 +122,10 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Dodge
                 session.DrawImage(_context.Buffers.GetBitmap(BufferId.EnemySprite), enemy.X, enemy.Y);
             }
 
-            using var format = new CanvasTextFormat { FontSize = 16 };
+            using var format = HspFont.Create();
             session.DrawText("ＧＡＭＥ　ＯＶＥＲＯＯ☆", 120, 200, Colors.White, format);
 
-            using var small = new CanvasTextFormat { FontSize = 13 };
+            using var small = HspFont.Create();
             session.DrawText(
                 $"HIGH SCORE = {_context.Save.HighScore}POINT\nYOUR SCORE = {_score}POINT\n\n{_resultMessage}\n\nもう一回遊ぶ → クリック\nデスクトップに戻る → どれかキーを押す",
                 new Rect(120, 224, 400, 160), Colors.White, small);
@@ -262,7 +261,6 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Dodge
         {
             _deathX = _mouseX - 15;
             _deathY = _mouseY - 19;
-            _context.HideCursor = false;
             _context.Sound.StopAll();
             _context.Sound.PlayEffect(SoundId.Tara);
             _phase = Phase.Dying;
@@ -280,10 +278,9 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Dodge
             _phase = Phase.GameOver;
             _context.Sound.PlayEffect(SoundId.Gameover);
 
-            _isNewHighScore = _score > _context.Save.HighScore;
             _pendingReward = null;
 
-            if (_isNewHighScore)
+            if (_score > _context.Save.HighScore)
             {
                 _context.Save.HighScore = _score;
                 _context.SaveManager.Save(_context.Save);
@@ -353,6 +350,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Dodge
             if (_phase == Phase.Intro || _phase == Phase.GameOver)
             {
                 _context.Sound.StopAll();
+                _context.HideCursor = true;
                 _phase = Phase.Countdown;
                 _countdownElapsed = TimeSpan.Zero;
                 _countdownStep = 0;

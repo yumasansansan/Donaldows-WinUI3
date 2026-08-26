@@ -13,6 +13,8 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes
         Screensaver,  // *scr/*scred
         VirusNag,     // *virus/*v_wait/*v_roo/*ed/*cd
 
+        BootIntro,    // buffer.hsp's opening animation
+        Setumei,      // *setumei (name entry, hosted as XAML)
         BiosPost,     // *power_sw/*bios
         BiosMenu,     // *biosmenu/*bioskeycheck
         StartBoot,    // *start (loading bar + install confirm)

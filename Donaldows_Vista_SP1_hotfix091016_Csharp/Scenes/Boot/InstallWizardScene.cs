@@ -3,34 +3,34 @@ using System.Collections.Generic;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Audio;
 using Donaldows_Vista_SP1_hotfix091016_Csharp.Rendering;
 using Microsoft.Graphics.Canvas;
-using Microsoft.Graphics.Canvas.Text;
 using Microsoft.UI;
 using Windows.Foundation;
 using Windows.UI;
 
 namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
 {
-    // Ports *install. The original's progress loop is `repeat 100` with
-    // `await 100`, i.e. one percent every 100ms — ten seconds, not the four
-    // an earlier version of this port used.
+    // Ports *install.
     //
-    // Reproduced: the hapset header art, the full status list (including the
-    // ＼(＾o＾)／ｵﾜﾀ line), the four-frame ASCII spinner, the hamico marker
-    // stepping down the status list at the original's percentage thresholds,
-    // the row of Donald faces filling along the bottom, the scattered faces
-    // that appear past 20% and fade out past 75%, and the completion +
-    // ranran2 celebration scatter.
+    // The header art (hapset.bmp) is NOT cleared when the install proper
+    // starts: the original only darkens it with 25 passes of a 10/255 black
+    // blend, which lands around 63% and leaves the picture visible behind
+    // everything for the rest of the sequence. The same is true of the closing
+    // ranran2 celebration and the red love.bmp zoom, which both scatter over
+    // whatever is already on screen rather than over black.
     //
-    // Not reproduced: the closing red gzoom wipe (buffer 10) that bridges into
-    // *kiss — the transition happens without it.
+    // The progress loop is `repeat 100` with `await 100` — one percent every
+    // 100ms, and the falling-face simulation advances once per those ticks,
+    // not once per rendered frame.
     public sealed class InstallWizardScene : IScene
     {
-        private enum Phase { Header, Installing, Complete, Celebrate }
+        private enum Phase { Header, Installing, Complete, Celebrate, LoveZoom }
 
         private static readonly TimeSpan HeaderDuration = TimeSpan.FromMilliseconds(2000);
-        private static readonly TimeSpan InstallDuration = TimeSpan.FromMilliseconds(10000);
+        private static readonly TimeSpan FadeDuration = TimeSpan.FromMilliseconds(400);
+        private static readonly TimeSpan Tick = TimeSpan.FromMilliseconds(100);
         private static readonly TimeSpan CompleteHold = TimeSpan.FromMilliseconds(3000 + 2000);
-        private static readonly TimeSpan CelebrateDuration = TimeSpan.FromMilliseconds(5400);
+        private static readonly TimeSpan LoveZoomDuration = TimeSpan.FromMilliseconds(1500);
+        private const float FadeDarkness = 0.63f;
         private static readonly string[] Spinner = { "/", "-", "\\", "|" };
 
         private static readonly string[] StatusLines =
@@ -46,7 +46,9 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
         private SceneContext _context = null!;
         private Phase _phase;
         private TimeSpan _elapsed;
+        private TimeSpan _sinceTick;
         private int _percent;
+        private int _spinnerFrame;
 
         private readonly List<(float X, float Y)> _scatter = new();
         private float _scatterAlpha = 100f;
@@ -59,7 +61,9 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
             _context = context;
             _phase = Phase.Header;
             _elapsed = TimeSpan.Zero;
+            _sinceTick = TimeSpan.Zero;
             _percent = 0;
+            _spinnerFrame = 0;
             _scatterAlpha = 100f;
             _celebrateStamps.Clear();
             _sinceLastStamp = TimeSpan.Zero;
@@ -75,24 +79,40 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
 
         public void Draw(CanvasDrawingSession session, Size canvasSize)
         {
+            // The static backdrop is redrawn every frame rather than captured,
+            // but it is identical to what the original snapshots into its
+            // scratch buffer and restores each iteration.
             session.Clear(Colors.Black);
+            session.DrawImage(_context.Buffers.GetBitmap(BufferId.InstallHeader), 256, 0);
 
-            switch (_phase)
+            if (_phase == Phase.Header)
             {
-                case Phase.Header:
-                    session.DrawImage(_context.Buffers.GetBitmap(BufferId.InstallHeader), 256, 0);
-                    return;
-
-                case Phase.Celebrate:
-                    foreach (var (x, y) in _celebrateStamps)
-                    {
-                        session.DrawImage(_context.Buffers.GetBitmap(BufferId.MascotSmall), x, y);
-                    }
-
-                    return;
+                return;
             }
 
+            var fade = Math.Clamp((float)(_elapsed / FadeDuration), 0f, 1f) * FadeDarkness;
+            if (_phase != Phase.Installing)
+            {
+                fade = FadeDarkness;
+            }
+
+            session.FillRectangle(0, 0, 640, 480, Color.FromArgb((byte)(fade * 255), 0, 0, 0));
+            session.FillRectangle(0, 380, 640, 80, Color.FromArgb((byte)(fade * 255), 255, 0, 0));
+
             DrawInstallBody(session);
+
+            if (_phase is Phase.Celebrate or Phase.LoveZoom)
+            {
+                foreach (var (x, y) in _celebrateStamps)
+                {
+                    session.DrawImage(_context.Buffers.GetBitmap(BufferId.MascotSmall), x, y);
+                }
+            }
+
+            if (_phase == Phase.LoveZoom)
+            {
+                DrawLoveZoom(session);
+            }
         }
 
         private void DrawInstallBody(CanvasDrawingSession session)
@@ -101,7 +121,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
 
             session.DrawImage(_context.Buffers.GetBitmap(BufferId.HddStatus), 120, 250);
 
-            using var format = new CanvasTextFormat { FontSize = 13 };
+            using var format = HspFont.Create();
             session.DrawText("全体の状況を表したグラフ▼", 10, 360, Colors.White, format);
             session.DrawText("インストーる～☆（洗脳）完了▲", 400, 460, Colors.White, format);
 
@@ -113,7 +133,6 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
                 session.DrawText(StatusLines[i], 20, 20 + i * 36, Colors.White, format);
             }
 
-            // Scattered faces raining down once past 20%, fading out past 75%.
             if (_percent > 20 && _scatterAlpha > 0)
             {
                 foreach (var (x, y) in _scatter)
@@ -122,13 +141,11 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
                 }
             }
 
-            // Row of faces filling along the bottom as the percentage climbs.
             for (var z = 1; z <= _percent; z++)
             {
                 session.DrawImage(face, z * 6.4f - 20f, 382f);
             }
 
-            // Marker stepping down the status list at the original's thresholds.
             var step = _percent switch
             {
                 > 95 => 5,
@@ -141,15 +158,27 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
             session.DrawImage(_context.Buffers.GetBitmap(BufferId.TaskbarIcon), 0, 36 * step + 20);
 
             session.FillRectangle(10, 460, 140, 20, Colors.Black);
-            if (_phase == Phase.Complete)
+            if (_phase == Phase.Installing)
             {
-                session.DrawText("インストーる～☆(洗脳)完了！！　再起動します。", 10, 460, Colors.Red, format);
+                session.DrawText($"Installing.,.{Spinner[_spinnerFrame]}{_percent}%", 10, 460, Colors.White, format);
             }
             else
             {
-                var spin = Spinner[(int)(_elapsed.TotalSeconds * 10) % Spinner.Length];
-                session.DrawText($"Installing.,.{spin}{_percent}%", 10, 460, Colors.White, format);
+                session.DrawText("インストーる～☆(洗脳)完了！！　再起動します。", 10, 460, Colors.Red, format);
             }
+        }
+
+        // repeat 150 { w+=2 ; gzoom w*4,w*4 of buffer 10 centred, over a red field }
+        private void DrawLoveZoom(CanvasDrawingSession session)
+        {
+            var t = Math.Clamp((float)(_elapsed / LoveZoomDuration), 0f, 1f);
+            var w = t * 300f;
+            var size = w * 4f;
+
+            session.FillRectangle(0, 0, 640, 480, Color.FromArgb((byte)(t * 255), 255, 0, 0));
+
+            var love = _context.Buffers.GetBitmap(BufferId.LoveZoom);
+            session.DrawImage(love, new Rect(320 - w * 2, 240 - w * 3.99f, size, size), love.Bounds);
         }
 
         public SceneTransition? Update(TimeSpan delta)
@@ -177,20 +206,37 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
                     {
                         _phase = Phase.Celebrate;
                         _elapsed = TimeSpan.Zero;
+                    }
+
+                    return null;
+
+                case Phase.Celebrate:
+                    UpdateCelebrate(delta);
+                    if (_celebrateStamps.Count >= 100)
+                    {
+                        _phase = Phase.LoveZoom;
+                        _elapsed = TimeSpan.Zero;
                         _context.Sound.PlayEffect(SoundId.Donadayo);
                     }
 
                     return null;
 
                 default:
-                    UpdateCelebrate(delta);
-                    return _elapsed >= CelebrateDuration ? new SceneTransition(SceneId.Kiss) : null;
+                    return _elapsed >= LoveZoomDuration ? new SceneTransition(SceneId.Kiss) : null;
             }
         }
 
         private void UpdateInstalling(TimeSpan delta)
         {
-            _percent = Math.Min(100, (int)(_elapsed / InstallDuration * 100));
+            _sinceTick += delta;
+            if (_sinceTick < Tick)
+            {
+                return;
+            }
+
+            _sinceTick = TimeSpan.Zero;
+            _percent = Math.Min(100, _percent + 1);
+            _spinnerFrame = (_spinnerFrame + 1) % Spinner.Length;
 
             if (_percent > 20)
             {
@@ -220,10 +266,10 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
 
             if (_percent > 75)
             {
-                _scatterAlpha = Math.Max(0, _scatterAlpha - 240f * (float)delta.TotalSeconds);
+                _scatterAlpha = Math.Max(0, _scatterAlpha - 4f);
             }
 
-            if (_elapsed >= InstallDuration)
+            if (_percent >= 100)
             {
                 _phase = Phase.Complete;
                 _elapsed = TimeSpan.Zero;

@@ -35,8 +35,8 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
 
         public void Draw(CanvasDrawingSession session, Size canvasSize)
         {
-            session.Clear(Colors.Black);
-            MessengerIntroScene.DrawChatWindowFrame(session, _context.Buffers, offlineLabel: true);
+            DesktopBackdrop.Draw(session, _context);
+            MessengerChrome.DrawChatWindow(session, _context, offlineLabel: true);
         }
 
         public SceneTransition? Update(TimeSpan delta)
