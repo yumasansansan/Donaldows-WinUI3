@@ -379,6 +379,11 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Cmd
                     _confirmCount = 0;
                     _message = "";
                     return null;
+                case "":
+                    // hantei stays 1 when nothing was typed, and the original
+                    // shows this hint instead of the wrong-command error.
+                    _message = "何かコマンドを入力しよう。　(例)RANRANROO";
+                    return null;
                 default:
                     _typed.Clear();
                     _message = "コマンドが間違っているかバグかもしれません。もう一度入力してみてください。";

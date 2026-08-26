@@ -26,6 +26,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
         private int _beatIndex;
         private TimeSpan _beatElapsed;
         private readonly List<(string Text, Color Color)> _log = new();
+        private bool _imeHint;
 
         public void Enter(SceneContext context, object? payload)
         {
@@ -34,6 +35,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
             _phase = Phase.Idle;
             _log.Clear();
             _log.Add(("ドナルド「ドナルドの事好き？」", Colors.Black));
+            _imeHint = false;
         }
 
         public void Draw(CanvasDrawingSession session, Size canvasSize)
@@ -49,6 +51,12 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
                 session.DrawText(
                     "どうする？？\n1.「もちろんさあ～☆」とコメントをうつ\n2.「すまん、また今度話さねえ？」とコメントをうつ\n「１」キーか「２」キーを押してください。",
                     0, 400, Colors.Black, promptFormat);
+
+                if (_imeHint)
+                {
+                    session.FillRectangle(60, 200, 520, 60, Color.FromArgb(255, 60, 60, 60));
+                    session.DrawText("ドナルド「入力モードを半角英数字にしてやってみてね。」", 70, 220, Colors.White, promptFormat);
+                }
             }
         }
 
@@ -119,6 +127,15 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Messenger
                 return null;
             }
 
+            // wparam 229 is VK_PROCESSKEY — the IME swallowed the key, so the
+            // original tells the player to switch to half-width alphanumeric.
+            if ((int)key == 229)
+            {
+                _imeHint = true;
+                return null;
+            }
+
+            _imeHint = false;
             var name = string.IsNullOrEmpty(_context.Save.PlayerName) ? "君" : _context.Save.PlayerName;
 
             if (key is VirtualKey.Number1 or VirtualKey.NumberPad1)

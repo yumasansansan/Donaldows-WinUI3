@@ -27,6 +27,10 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Rendering
         // buffer.hsp's boot intro: three blink frames and eight talking frames.
         Wait1, Wait2, Wait3,
         Sp1, Sp2, Sp3, Sp4, Sp5, Sp6, Sp7, Sp8,
+
+        // rpg.hsp *punch: buffer 60 is a 2560x480 strip, 61 the impact fist,
+        // 62 the close-up face.
+        PunchStrip, PunchImpact, PunchFace,
         SneezeStamp,       // buffer 22, img/kusyami.gif
         EnemySprite,       // buffer 17, img/nmini.bmp (dodge-game "mini Donald" enemy)
         PlayerCursorSprite, // buffer 18, img/mg.bmp (dodge-game player cursor)

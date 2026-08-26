@@ -31,7 +31,10 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
         private static readonly TimeSpan CompleteHold = TimeSpan.FromMilliseconds(3000 + 2000);
         private static readonly TimeSpan LoveZoomDuration = TimeSpan.FromMilliseconds(1500);
         private const float FadeDarkness = 0.63f;
-        private static readonly string[] Spinner = { "/", "-", "\\", "|" };
+        private static readonly string[] Spinner =
+        {
+            "Installing,../", "Installing.,.-", "Installing..,\\", "Installing.,.|",
+        };
 
         private static readonly string[] StatusLines =
         {
@@ -160,7 +163,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
             session.FillRectangle(10, 460, 140, 20, Colors.Black);
             if (_phase == Phase.Installing)
             {
-                session.DrawText($"Installing.,.{Spinner[_spinnerFrame]}{_percent}%", 10, 460, Colors.White, format);
+                session.DrawText($"{Spinner[_spinnerFrame]}{_percent}%", 10, 460, Colors.White, format);
             }
             else
             {
