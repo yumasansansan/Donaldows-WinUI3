@@ -1,0 +1,63 @@
+using System.Collections.Generic;
+
+namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Audio
+{
+    public static class SoundCatalog
+    {
+        public static readonly IReadOnlyDictionary<SoundId, string> FileNames = new Dictionary<SoundId, string>
+        {
+            [SoundId.Heha] = "heha.wav",
+            [SoundId.Aro] = "aro.wav",
+            [SoundId.Jyan] = "jyan.wav",
+            [SoundId.Aree] = "aree.wav",
+            [SoundId.Tara] = "tara.wav",
+            [SoundId.Cd] = "cd.wav",
+            [SoundId.Uresii] = "uresii.wav",
+            [SoundId.Urcd] = "urcd.wav",
+            [SoundId.Fu] = "fu.wav",
+            [SoundId.Kusy] = "kusy.wav",
+            [SoundId.Welcome] = "welcome.wav",
+            [SoundId.Ran] = "ran.wav",
+            [SoundId.U] = "u.wav",
+            [SoundId.Ohana] = "ohana.wav",
+            [SoundId.Mosi] = "mosi.wav",
+            [SoundId.Kore] = "kore.wav",
+            [SoundId.Dori] = "dori.wav",
+            [SoundId.Izen] = "izen.wav",
+            [SoundId.Kotti] = "kotti.wav",
+            [SoundId.N] = "n.wav",
+            [SoundId.Koremo] = "koremo.wav",
+            [SoundId.Korekaa] = "korekaa.wav",
+            [SoundId.Itte] = "itte.wav",
+            [SoundId.Magic] = "magic.wav",
+            [SoundId.Kiken] = "kiken.wav",
+            [SoundId.Odo] = "odo.wav",
+            [SoundId.Ur] = "ur.wav",
+            [SoundId.Donadayo] = "donadayo.wav",
+            [SoundId.Start] = "start.wav",
+            [SoundId.Iea] = "iea.wav",
+            [SoundId.Login] = "login.wav",
+            [SoundId.Logoff] = "logoff.wav",
+            [SoundId.Gameover] = "gameover.wav",
+            [SoundId.Rurou] = "rurou.wav",
+            [SoundId.GameBgm1] = "game_bgm1.wav",
+            [SoundId.Uresiina] = "uresiina.wav",
+            [SoundId.Donarudodes] = "donarudodes.wav",
+            [SoundId.Shutdown] = "shutdown.wav",
+            [SoundId.Echoroo] = "echoroo.wav",
+            [SoundId.Fii] = "fii.wav",
+            [SoundId.AnikiA] = "aniki_a.wav",
+            [SoundId.AnikiDarasinee] = "aniki_darasinee.wav",
+            [SoundId.AnikiSumasen] = "aniki_sumasen.wav",
+            [SoundId.AnikiU] = "aniki_u.wav",
+            [SoundId.Online] = "online.wav",
+            [SoundId.Type] = "type.wav",
+            [SoundId.Motikon] = "motikon.wav",
+            [SoundId.Uac] = "uac.wav",
+            [SoundId.GameBgm2] = "game_bgm2.wav",
+            [SoundId.Buchu] = "buchu.wav",
+            [SoundId.Yattyau] = "yattyau.wav",
+            [SoundId.Fart] = "fart.wav",
+        };
+    }
+}

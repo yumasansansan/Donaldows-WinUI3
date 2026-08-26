@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="Donaldows_Vista_SP1_hotfix091016_Csharp.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Donaldows_Vista_SP1_hotfix091016_Csharp"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:canvas="using:Microsoft.Graphics.Canvas.UI.Xaml"
+    mc:Ignorable="d"
+    Title="Microosoft Donaldows Vista (Service Pack 1)+(Hotfix091016)">
+
+    <Grid x:Name="RootGrid" IsTabStop="True" KeyDown="RootGrid_KeyDown">
+        <canvas:CanvasAnimatedControl
+            x:Name="MainCanvas"
+            Width="640"
+            Height="480"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            CreateResources="MainCanvas_CreateResources"
+            Update="MainCanvas_Update"
+            Draw="MainCanvas_Draw"
+            PointerMoved="MainCanvas_PointerMoved"
+            PointerPressed="MainCanvas_PointerPressed" />
+
+        <!-- Ports *setumei. This is the one screen kept as plain XAML rather than
+             Win2D-drawn content, since real IME-capable text entry for the
+             player's name needs a native text control. -->
+        <Grid x:Name="SetumeiOverlay" Background="#FF000080">
+            <ScrollViewer Padding="12">
+                <StackPanel Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="名前を入力→" Foreground="White" VerticalAlignment="Center" />
+                        <TextBox x:Name="NameTextBox" Width="150" MaxLength="12" />
+                        <Button Content="起動" Click="StartButton_Click" />
+                    </StackPanel>
+                    <TextBlock Foreground="White" TextWrapping="Wrap" FontSize="12" Text="このOSはWINDOWS上で動く手軽なOSです。&#10;このソフトをやりすぎると、正常な自分に戻れなくなるかもしれません&#10;上の起動ボタンを押すとドナルドウズが始まります&#10;大事な役目があるマシンでは実行しないほうがいいかもしれません&#10;作業中であれば（文章作っている途中等）保存してからドナルドウズを起動しましょう。&#10;&#10;ドナルドが大嫌いな人は余計に嫌いになると思いますｗ&#10;起動して後悔しても知りません。今回もマジで自重しませんからｍｍ&#10;&#10;結構激しいプログラムなので、アンチウイルスソフトが本物のウイルスと誤認してしまう&#10;可能性があります。（ウイルスセキュリティゼロで確認されたらしい。・・；）&#10;このソフトはコンピューターに害は与えませんが、あなたの頭までは保証しません&#10;詳しくは「はじめに読んでね☆ドナルドより」をご覧下さい。&#10;安全に遊んでいただくためにちゃんと読んでください&#10;読まないと容赦なくドナルドに狩られます。&#10;&#10;対象者：10歳以上40歳未満の方でドナルドの事がだぁああああいすきな人&#10;もしあなたが十代前半だったら、多分楽しめると思います。" />
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</Window>

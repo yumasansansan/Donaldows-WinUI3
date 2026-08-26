@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Donaldows_Vista_SP1_hotfix091016_Csharp (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Donaldows_Vista_SP1_hotfix091016_Csharp (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
