@@ -31,6 +31,11 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
         private const float CaptionY = 10f;
         private const float CaptionFontSize = 50f;
 
+        // buffer.hsp issues no `color` before these captions, and HSP's draw
+        // colour starts out black — drawing them white made them invisible
+        // against the light part of the artwork.
+        private static readonly Color CaptionColor = Colors.Black;
+
         private SceneContext _context = null!;
         private Frame[] _frames = Array.Empty<Frame>();
         private int _index;
@@ -132,7 +137,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Boot
                     ch.ToString(),
                     CaptionX,
                     CaptionY + line * CaptionFontSize,
-                    Colors.White,
+                    CaptionColor,
                     format);
                 line++;
             }

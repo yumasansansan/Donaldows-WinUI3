@@ -86,11 +86,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
             // entry overlay starts hidden and is revealed by SetumeiScene.
             SetumeiOverlay.Visibility = Visibility.Collapsed;
 
-            if (AppWindow.Presenter is OverlappedPresenter presenter)
-            {
-                presenter.IsResizable = false;
-                presenter.IsMaximizable = false;
-            }
+            LockWindowSize();
 
             // Keys are handled on the root with handledEventsToo so they still
             // reach the scene even when a focused child marks them handled
@@ -119,17 +115,30 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
             ShutDownCanvas();
         }
 
-        // WinUI3 opens new windows at a default size, not sized to their content.
-        // Measure the chrome (title bar/borders) overhead once the first layout
-        // pass has run, then resize the AppWindow so the 640x480 canvas fits
-        // exactly with no extra window around it, and lock the size so dragging
-        // can't reintroduce the mismatch (the original HSP window wasn't resizable either).
+        // The original's window is a fixed 640x480. Applying this once in the
+        // constructor does not stick — launching by double-clicking the exe
+        // activates the window before the presenter is ready — so it is
+        // re-applied after layout and on every activation.
+        private void LockWindowSize()
+        {
+            if (AppWindow?.Presenter is OverlappedPresenter presenter)
+            {
+                presenter.IsResizable = false;
+                presenter.IsMaximizable = false;
+            }
+        }
+
+        // WinUI3 opens windows at a default size rather than sized to content,
+        // so the chrome overhead is measured once the first layout pass has run
+        // and the window resized to make the 640x480 canvas fit exactly.
         private void RootGrid_Loaded(object sender, RoutedEventArgs e)
         {
             RootGrid.Loaded -= RootGrid_Loaded;
+            LockWindowSize();
 
             if (RootGrid.XamlRoot is not { } xamlRoot)
             {
+                DispatcherQueue.TryEnqueue(LockWindowSize);
                 return;
             }
 
@@ -139,6 +148,10 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
 
             AppWindow.Resize(new SizeInt32(AppWindow.Size.Width + deltaWidth, AppWindow.Size.Height + deltaHeight));
             _cursorHost.Focus(FocusState.Programmatic);
+
+            // Re-applied after the resize has been processed; AppWindow.Resize
+            // can otherwise land after the style change and undo it.
+            DispatcherQueue.TryEnqueue(LockWindowSize);
         }
 
         // Keyboard focus can be lost when the window is deactivated (or when a
@@ -146,19 +159,19 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
         // reclaimed whenever the window comes back to the foreground.
         private void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
         {
-            if (args.WindowActivationState != WindowActivationState.Deactivated
-                && SetumeiOverlay.Visibility != Visibility.Visible)
+            if (args.WindowActivationState == WindowActivationState.Deactivated)
+            {
+                return;
+            }
+
+            LockWindowSize();
+
+            if (SetumeiOverlay.Visibility != Visibility.Visible)
             {
                 _cursorHost.Focus(FocusState.Programmatic);
             }
         }
 
-        // CanvasAnimatedControl drives Update/Draw on its own game-loop thread.
-        // Merely pausing it does not wait for an in-flight frame, so tearing the
-        // window down could leave that thread touching resources that were
-        // already released — which surfaced as a 0x80000003 fail-fast on exit.
-        // RemoveFromVisualTree is Win2D's documented shutdown for this control:
-        // it stops the loop and releases its resources deterministically.
         private void MainWindow_Closed(object sender, WindowEventArgs args) => ShutDownCanvas();
 
         // CanvasAnimatedControl drives Update/Draw on its own game-loop thread.
@@ -178,7 +191,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
 
             _canvasShutDown = true;
             _sceneManager = null;
-            _sound?.StopAll();
+            _sound?.Shutdown();
 
             MainCanvas.Paused = true;
             MainCanvas.RemoveFromVisualTree();
@@ -201,33 +214,52 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
                 Buffers = buffers,
                 RequestAppExit = () => DispatcherQueue.TryEnqueue(() =>
                 {
-                    _allowClose = true;
-                    Close();
-                }),
-                ShakeWindow = (amplitudeX, amplitudeY) => DispatcherQueue.TryEnqueue(() =>
-                {
-                    if (amplitudeX <= 0 && amplitudeY <= 0)
+                    if (_canvasShutDown)
                     {
-                        if (_restingWindowPosition is { } resting)
-                        {
-                            AppWindow.Move(resting);
-                            _restingWindowPosition = null;
-                        }
-
                         return;
                     }
 
-                    // Captured on the first frame of each shake, not once for
-                    // the lifetime of the window — otherwise dragging the
-                    // window and then shaking would snap it back to where it
-                    // first opened.
-                    _restingWindowPosition ??= AppWindow.Position;
-                    var home = _restingWindowPosition.Value;
-
-                    AppWindow.Move(new PointInt32(
-                        home.X + (amplitudeX > 0 ? Random.Shared.Next(-amplitudeX, amplitudeX + 1) : 0),
-                        home.Y + (amplitudeY > 0 ? Random.Shared.Next(-amplitudeY, amplitudeY + 1) : 0)));
+                    _allowClose = true;
+                    Close();
                 }),
+                ShakeWindow = (amplitudeX, amplitudeY) =>
+                {
+                    // Nothing to do, and nothing to undo — don't queue work.
+                    if (amplitudeX <= 0 && amplitudeY <= 0 && _restingWindowPosition is null)
+                    {
+                        return;
+                    }
+
+                    DispatcherQueue.TryEnqueue(() =>
+                    {
+                        if (_canvasShutDown)
+                        {
+                            return;
+                        }
+
+                        if (amplitudeX <= 0 && amplitudeY <= 0)
+                        {
+                            if (_restingWindowPosition is { } resting)
+                            {
+                                AppWindow.Move(resting);
+                                _restingWindowPosition = null;
+                            }
+
+                            return;
+                        }
+
+                        // Captured on the first frame of each shake, not once
+                        // for the lifetime of the window — otherwise dragging
+                        // the window and then shaking would snap it back to
+                        // where it first opened.
+                        _restingWindowPosition ??= AppWindow.Position;
+                        var home = _restingWindowPosition.Value;
+
+                        AppWindow.Move(new PointInt32(
+                            home.X + (amplitudeX > 0 ? Random.Shared.Next(-amplitudeX, amplitudeX + 1) : 0),
+                            home.Y + (amplitudeY > 0 ? Random.Shared.Next(-amplitudeY, amplitudeY + 1) : 0)));
+                    });
+                },
                 ShowNameEntry = () => DispatcherQueue.TryEnqueue(() =>
                 {
                     SetumeiOverlay.Visibility = Visibility.Visible;
@@ -235,7 +267,7 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
                 }),
                 MinimizeWindow = () => DispatcherQueue.TryEnqueue(() =>
                 {
-                    if (AppWindow.Presenter is OverlappedPresenter p)
+                    if (!_canvasShutDown && AppWindow.Presenter is OverlappedPresenter p)
                     {
                         p.Minimize();
                     }
@@ -294,6 +326,11 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
 
         private void MainCanvas_Update(ICanvasAnimatedControl sender, CanvasAnimatedUpdateEventArgs args)
         {
+            if (_canvasShutDown)
+            {
+                return;
+            }
+
             _sceneManager?.Update(args.Timing.ElapsedTime);
 
             // Scenes toggle HideCursor from the game-loop thread; applying it
@@ -308,6 +345,11 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp
 
         private void MainCanvas_Draw(ICanvasAnimatedControl sender, CanvasAnimatedDrawEventArgs args)
         {
+            if (_canvasShutDown)
+            {
+                return;
+            }
+
             _sceneManager?.Draw(args.DrawingSession, sender, sender.Size);
         }
 
