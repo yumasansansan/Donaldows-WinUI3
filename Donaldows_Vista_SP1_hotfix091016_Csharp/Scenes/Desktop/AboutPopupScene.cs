@@ -35,8 +35,15 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Desktop
             session.DrawImage(_context.Buffers.GetBitmap(BufferId.DonaFace), 200, 160);
 
             using var bodyFormat = HspFont.Create();
+            // The original prints from pos 170,150 starting with a blank line,
+            // and pads each line with leading spaces to centre it by hand.
             session.DrawText(
-                "Donaldows Vista sp1\n(Version0.6)\n作成：H,S\n\n\nこのドナルドウズはフリーウェアーです\n\n・ドナルドに会いたくなったらいつでも\n　会える夢のソフトです。",
+                "\n               Donaldows Vista sp1\n" +
+                "                      (Version0.6)\n" +
+                "                        作成：H,S\n\n\n" +
+                "このドナルドウズはフリーウェアーです\n\n" +
+                "・ドナルドに会いたくなったらいつでも\n" +
+                "　会える夢のソフトです。",
                 170, 150, Colors.White, bodyFormat);
         }
 

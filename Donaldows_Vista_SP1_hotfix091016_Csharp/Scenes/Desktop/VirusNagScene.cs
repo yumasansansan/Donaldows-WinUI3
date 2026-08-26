@@ -88,8 +88,8 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Desktop
         private void DrawButton(CanvasDrawingSession session, Rect rect, string label)
         {
             session.FillRectangle(rect, Color.FromArgb(255, 200, 200, 200));
-            using var format = new CanvasTextFormat { FontSize = 12, VerticalAlignment = CanvasVerticalAlignment.Center };
-            session.DrawText(label, new Rect(rect.X + 3, rect.Y, rect.Width, rect.Height), Colors.Black, format);
+            using var format = HspFont.CreateCentered(14f);
+            session.DrawText(label, rect, Colors.Black, format);
 
             if (rect.Contains(new Point(_mouseX, _mouseY)))
             {

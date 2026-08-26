@@ -43,7 +43,8 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Cmd
             session.DrawText("ファイる～☆|編集|書式|表示|ヘルプ|　←このメニュは出来てません。", 10, 20, Colors.Black, format);
 
             session.FillRectangle(CloseButton, Color.FromArgb(255, 200, 200, 200));
-            session.DrawText("CLOSE", CloseButton, Colors.Black, format);
+            using var buttonFormat = HspFont.CreateCentered();
+            session.DrawText("CLOSE", CloseButton, Colors.Black, buttonFormat);
 
             foreach (var (x, y, ch) in _chars)
             {

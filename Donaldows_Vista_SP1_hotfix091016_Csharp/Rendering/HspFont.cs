@@ -19,6 +19,18 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Rendering
             LineSpacingBaseline = size * 0.85f,
         };
 
+        // Centred inside a bounding rectangle. The original positions button
+        // captions with a bare `pos x,y` tuned to HSP's own font metrics;
+        // reusing those coordinates verbatim pushes the text out of the button
+        // at this font size, so buttons centre their labels instead.
+        public static CanvasTextFormat CreateCentered(float size = DefaultSize) => new()
+        {
+            FontSize = size,
+            WordWrapping = CanvasWordWrapping.NoWrap,
+            HorizontalAlignment = CanvasHorizontalAlignment.Center,
+            VerticalAlignment = CanvasVerticalAlignment.Center,
+        };
+
         // Same size but allowed to wrap inside a bounding rectangle, for the
         // few screens that are laid out as paragraphs rather than fixed lines.
         public static CanvasTextFormat CreateWrapping(float size = DefaultSize) => new()

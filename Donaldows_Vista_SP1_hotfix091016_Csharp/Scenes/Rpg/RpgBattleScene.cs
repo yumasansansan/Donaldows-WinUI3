@@ -138,6 +138,16 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Rpg
 
         private string PlayerName() => string.IsNullOrEmpty(_context.Save.PlayerName) ? "君" : _context.Save.PlayerName;
 
+        // (tairyoku<=0)|(sennou>=100.0)
+        private bool IsDefeated() => _state.Tairyoku <= 0 || _state.Sennou >= 100.0f;
+
+        private SceneTransition GameOver()
+        {
+            _context.ShakeWindow(0, 0);
+            _context.Sound.StopAll();
+            return new SceneTransition(SceneId.RpgGameOver, _state);
+        }
+
         public SceneTransition? Update(TimeSpan delta)
         {
             _phaseElapsed += delta;
@@ -180,10 +190,9 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Rpg
                     }
                 }
 
-                if (_state.Tairyoku <= 0 || _state.Sennou >= 100.0f)
+                if (IsDefeated())
                 {
-                    _context.Sound.StopAll();
-                    return new SceneTransition(SceneId.RpgGameOver, _state);
+                    return GameOver();
                 }
 
                 return null;
@@ -216,8 +225,19 @@ namespace Donaldows_Vista_SP1_hotfix091016_Csharp.Scenes.Rpg
                 {
                     _context.ShakeWindow(0, 0);
                     _pendingShake = 0;
-                    _phase = Phase.Result;
                     _phaseElapsed = TimeSpan.Zero;
+
+                    // *punch is a gosub, so it always runs to completion; the
+                    // battle loop only tests for death on its NEXT iteration,
+                    // before the `if resul=1` result screen. A killing blow
+                    // therefore plays out in full and then skips straight to
+                    // the game over, without showing the damage report.
+                    if (IsDefeated())
+                    {
+                        return GameOver();
+                    }
+
+                    _phase = Phase.Result;
                 }
 
                 return null;
